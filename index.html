@@ -15,6 +15,8 @@
             --accent-green: #10b981;
             --accent-amber: #f59e0b;
             --accent-purple: #8b5cf6;
+            --accent-cyan: #06b6d4;
+            --accent-rose: #f43f5e;
             --selected-day: rgba(59, 130, 246, 0.45);
         }
 
@@ -139,6 +141,9 @@
 
         .badge-shift { background: rgba(59, 130, 246, 0.3); color: #93c5fd; }
         .badge-earn { font-weight: bold; color: var(--accent-green); }
+        .badge-urlop { background: rgba(6, 182, 212, 0.3); color: #67e8f9; }
+        .badge-l4 { background: rgba(244, 63, 94, 0.3); color: #fda4af; }
+        .badge-bezpl { background: rgba(148, 163, 184, 0.3); color: #cbd5e1; }
 
         .form-group { margin-bottom: 6px; }
         label { display: block; font-size: 0.7rem; color: var(--text-sub); margin-bottom: 2px; }
@@ -253,20 +258,30 @@
             <div class="selected-info" id="selectedDaysText">Kliknij dni na kalendarzu</div>
             
             <div class="form-group">
+                <label>Typ Dnia / Status</label>
+                <select id="dayTypeSelect" onchange="handleDayTypeChange()">
+                    <option value="work">Praca (Standardowa)</option>
+                    <option value="urlop">Urlop płatny</option>
+                    <option value="l4">Zwolnienie lekarskie (L4 - 80%)</option>
+                    <option value="bezplatny">Urlop bezpłatny</option>
+                </select>
+            </div>
+
+            <div class="form-group">
                 <label>Profil Zmiany</label>
                 <select id="profileSelect" onchange="applyProfile()">
                     <option value="">-- Wybierz profil --</option>
                 </select>
             </div>
 
-            <div class="row">
+            <div class="row" id="workInputRow">
                 <div class="form-group">
                     <label>Godziny</label>
                     <input type="number" step="0.5" id="inputHours" placeholder="8">
                 </div>
                 <div class="form-group">
                     <label>Stawka/h (zł)</label>
-                    <input type="number" step="0.01" id="inputRate" placeholder="25">
+                    <input type="number" step="0.01" id="inputRate" placeholder="31.40">
                 </div>
             </div>
 
@@ -355,11 +370,11 @@
                     </div>
                     <div class="form-group">
                         <label>Stawka/h (zł)</label>
-                        <input type="number" step="0.01" id="profRate" placeholder="30">
+                        <input type="number" step="0.01" id="profRate" placeholder="31.40">
                     </div>
                 </div>
                 <button class="btn-primary" style="background: var(--accent-purple); margin-top: 4px;" onclick="saveProfile()">Dodaj profil</button>
-                <div id="profilesList" style="margin-top: 6px; font-size: 0.75rem;"></div>
+                <div id="profilesList" style="margin-top: 8px; font-size: 0.75rem;"></div>
             </div>
         </div>
 
@@ -408,17 +423,17 @@
     var currentDate = new Date();
     var selectedDates = [];
 
-    function getData() { try { return JSON.parse(localStorage.getItem('work_data_v5') || '{}'); } catch(e) { return {}; } }
-    function saveData(data) { localStorage.setItem('work_data_v5', JSON.stringify(data)); }
+    function getData() { try { return JSON.parse(localStorage.getItem('work_data_v6') || '{}'); } catch(e) { return {}; } }
+    function saveData(data) { localStorage.setItem('work_data_v6', JSON.stringify(data)); }
     
-    function getExtras() { try { return JSON.parse(localStorage.getItem('work_extras_v5') || '{}'); } catch(e) { return {}; } }
-    function saveExtras(extras) { localStorage.setItem('work_extras_v5', JSON.stringify(extras)); }
+    function getExtras() { try { return JSON.parse(localStorage.getItem('work_extras_v6') || '{}'); } catch(e) { return {}; } }
+    function saveExtras(extras) { localStorage.setItem('work_extras_v6', JSON.stringify(extras)); }
 
-    function getProfiles() { try { return JSON.parse(localStorage.getItem('work_profiles_v5') || '[]'); } catch(e) { return []; } }
-    function saveProfiles(p) { localStorage.setItem('work_profiles_v5', JSON.stringify(p)); }
+    function getProfiles() { try { return JSON.parse(localStorage.getItem('work_profiles_v6') || '[]'); } catch(e) { return []; } }
+    function saveProfiles(p) { localStorage.setItem('work_profiles_v6', JSON.stringify(p)); }
 
-    function getSettings() { try { return JSON.parse(localStorage.getItem('work_settings_v5') || '{}'); } catch(e) { return {}; } }
-    function saveSettings(s) { localStorage.setItem('work_settings_v5', JSON.stringify(s)); }
+    function getSettings() { try { return JSON.parse(localStorage.getItem('work_settings_v6') || '{}'); } catch(e) { return {}; } }
+    function saveSettings(s) { localStorage.setItem('work_settings_v6', JSON.stringify(s)); }
 
     function getCurrentMonthKey() {
         return currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
@@ -465,11 +480,28 @@
 
                 if (data[dateStr]) {
                     var entry = data[dateStr];
-                    var baseEarn = (entry.hours || 0) * (entry.rate || 0);
+                    var t = entry.type || 'work';
+                    var h = entry.hours || 0;
+                    var r = entry.rate || 0;
+                    var earn = 0;
+
+                    if (t === 'work' || t === 'urlop') earn = h * r;
+                    else if (t === 'l4') earn = (h * r) * 0.8;
+                    else if (t === 'bezplatny') earn = 0;
 
                     html += '<div class="day-info">';
-                    html += '<span class="day-badge badge-shift">' + entry.hours + 'h</span>';
-                    html += '<span class="day-badge badge-earn">' + Math.round(baseEarn) + 'zł</span>';
+                    if (t === 'work') {
+                        html += '<span class="day-badge badge-shift">' + h + 'h</span>';
+                        html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
+                    } else if (t === 'urlop') {
+                        html += '<span class="day-badge badge-urlop">Urlop</span>';
+                        html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
+                    } else if (t === 'l4') {
+                        html += '<span class="day-badge badge-l4">L4 (80%)</span>';
+                        html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
+                    } else if (t === 'bezplatny') {
+                        html += '<span class="day-badge badge-bezpl">Bezpłatny</span>';
+                    }
                     html += '</div>';
                 }
 
@@ -550,6 +582,16 @@
         }
     }
 
+    function handleDayTypeChange() {
+        var val = document.getElementById('dayTypeSelect').value;
+        var row = document.getElementById('workInputRow');
+        if (val === 'bezplatny') {
+            row.style.display = 'none';
+        } else {
+            row.style.display = 'flex';
+        }
+    }
+
     function saveProfile() {
         var name = document.getElementById('profName').value;
         var hours = parseFloat(document.getElementById('profHours').value) || 0;
@@ -559,6 +601,15 @@
         profiles.push({ id: Date.now(), name: name, hours: hours, rate: rate });
         saveProfiles(profiles);
         document.getElementById('profName').value = '';
+        document.getElementById('profHours').value = '';
+        document.getElementById('profRate').value = '';
+        renderProfiles();
+    }
+
+    function deleteProfile(id) {
+        var profiles = getProfiles();
+        profiles = profiles.filter(function(p) { return p.id !== id; });
+        saveProfiles(profiles);
         renderProfiles();
     }
 
@@ -567,12 +618,22 @@
         var select = document.getElementById('profileSelect');
         var list = document.getElementById('profilesList');
         select.innerHTML = '<option value="">-- Wybierz profil --</option>';
-        list.innerHTML = '<b>Zapisane profile:</b><br>';
+        
+        if (profiles.length === 0) {
+            list.innerHTML = 'Brak zapisanych profili.';
+            return;
+        }
+
+        var html = '<b>Zapisane profile:</b><br>';
         for (var i = 0; i < profiles.length; i++) {
             var p = profiles[i];
             select.innerHTML += '<option value="' + p.id + '">' + p.name + ' (' + p.hours + 'h / ' + p.rate + 'zł)</option>';
-            list.innerHTML += '<div style="margin-top:2px;">• ' + p.name + ': ' + p.hours + 'h @ ' + p.rate + ' zł/h</div>';
+            html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px; background:#0f172a; padding:4px 6px; border-radius:4px;">';
+            html += '<span>• <b>' + p.name + '</b>: ' + p.hours + 'h @ ' + p.rate + ' zł/h</span>';
+            html += '<button onclick="deleteProfile(' + p.id + ')" style="background:#ef4444; color:white; border:none; border-radius:3px; padding:2px 6px; font-size:0.65rem; cursor:pointer;">Usuń</button>';
+            html += '</div>';
         }
+        list.innerHTML = html;
     }
 
     function applyProfile() {
@@ -590,10 +651,14 @@
 
     function saveSelectedDays() {
         if (selectedDates.length === 0) return alert('Zaznacz dni na kalendarzu!');
-        var hours = parseFloat(document.getElementById('inputHours').value) || 0;
+        var type = document.getElementById('dayTypeSelect').value;
+        var hours = type === 'bezplatny' ? 0 : (parseFloat(document.getElementById('inputHours').value) || 0);
         var rate = parseFloat(document.getElementById('inputRate').value) || 0;
+        
         var data = getData();
-        for (var i = 0; i < selectedDates.length; i++) { data[selectedDates[i]] = { hours: hours, rate: rate }; }
+        for (var i = 0; i < selectedDates.length; i++) { 
+            data[selectedDates[i]] = { type: type, hours: hours, rate: rate }; 
+        }
         saveData(data);
         renderCalendar();
     }
@@ -666,19 +731,12 @@
         if (contractType === 'uz_student') return gross;
         
         if (contractType === 'uop') {
-            // Realistyczne wyliczenie dla UoP:
-            // 1. Składki społeczne pracownika: emerytalna (9.76%), rentowa (1.5%), chorobowa (2.45%) = 13.71%
             var zusSpoleczne = gross * 0.1371;
             var podstawaZdrowotna = gross - zusSpoleczne;
-            
-            // 2. Składka zdrowotna: 9% od podstawy po odliczeniu społecznych
             var skladkaZdrowotna = podstawaZdrowotna * 0.09;
-            
-            // 3. Podstawa opodatkowania (uproszczona, koszty uzyskania przychodu ~250 zł)
             var podstawaOpodatkowania = podstawaZdrowotna - 250;
             if (podstawaOpodatkowania < 0) podstawaOpodatkowania = 0;
             
-            // 4. Zaliczka na PIT 12% minus kwota zmniejszająca podatek (300 zł)
             var zaliczkaPit = (podstawaOpodatkowania * 0.12) - 300;
             if (zaliczkaPit < 0) zaliczkaPit = 0;
             
@@ -687,7 +745,6 @@
         }
         
         if (contractType === 'uz_normal') {
-            // Standardowa umowa zlecenie z ZUS i podatkiem (szacunek ok. 22%)
             return gross * 0.78;
         }
         
@@ -707,8 +764,22 @@
         for (var d in data) {
             if (d.indexOf(monthKey) === 0) {
                 var item = data[d];
-                hours += item.hours || 0;
-                base += (item.hours || 0) * (item.rate || 0);
+                var t = item.type || 'work';
+                var h = item.hours || 0;
+                var r = item.rate || 0;
+
+                if (t === 'work') {
+                    hours += h;
+                    base += h * r;
+                } else if (t === 'urlop') {
+                    hours += h; // wlicza się do puli godzin płatnych
+                    base += h * r;
+                } else if (t === 'l4') {
+                    hours += h;
+                    base += (h * r) * 0.8; // L4 liczone po 80% stawki
+                } else if (t === 'bezplatny') {
+                    // 0 godzin i 0 zł
+                }
             }
         }
 
