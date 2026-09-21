@@ -27,7 +27,8 @@
             background-color: var(--bg);
             color: var(--text-main);
             margin: 0;
-            padding: 8px;
+            /* Bezpieczny odstęp od górnej krawędzi telefonu, żeby nagłówek nie był ucięty */
+            padding: 12px 8px 8px 8px;
             -webkit-tap-highlight-color: transparent;
         }
 
@@ -35,9 +36,9 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             border-bottom: 1px solid var(--card-border);
-            padding-bottom: 6px;
+            padding-bottom: 8px;
         }
 
         h1 { margin: 0; font-size: 1.1rem; color: var(--primary); }
@@ -394,6 +395,9 @@
                         <input type="number" id="taxRateInput" placeholder="25" value="25" oninput="saveOptions()">
                     </div>
                 </div>
+
+                <hr style="border:0; border-top:1px solid var(--card-border); margin: 8px 0;">
+                <button class="btn-secondary" style="background: rgba(244, 63, 94, 0.2); color: var(--accent-rose); border: 1px solid var(--accent-rose);" onclick="clearAllHistory()">Wyczyść całą historię danych</button>
             </div>
         </div>
     </div>
@@ -403,17 +407,30 @@
     var currentDate = new Date();
     var selectedDates = [];
 
-    function getData() { try { return JSON.parse(localStorage.getItem('work_data_v6') || '{}'); } catch(e) { return {}; } }
-    function saveData(data) { localStorage.setItem('work_data_v6', JSON.stringify(data)); }
+    function getData() { try { return JSON.parse(localStorage.getItem('work_data') || '{}'); } catch(e) { return {}; } }
+    function saveData(data) { localStorage.setItem('work_data', JSON.stringify(data)); }
     
-    function getExtras() { try { return JSON.parse(localStorage.getItem('work_extras_v6') || '{}'); } catch(e) { return {}; } }
-    function saveExtras(extras) { localStorage.setItem('work_extras_v6', JSON.stringify(extras)); }
+    function getExtras() { try { return JSON.parse(localStorage.getItem('work_extras') || '{}'); } catch(e) { return {}; } }
+    function saveExtras(extras) { localStorage.setItem('work_extras', JSON.stringify(extras)); }
 
-    function getProfiles() { try { return JSON.parse(localStorage.getItem('work_profiles_v6') || '[]'); } catch(e) { return []; } }
-    function saveProfiles(p) { localStorage.setItem('work_profiles_v6', JSON.stringify(p)); }
+    function getProfiles() { try { return JSON.parse(localStorage.getItem('work_profiles') || '[]'); } catch(e) { return []; } }
+    function saveProfiles(p) { localStorage.setItem('work_profiles', JSON.stringify(p)); }
 
-    function getSettings() { try { return JSON.parse(localStorage.getItem('work_settings_v6') || '{}'); } catch(e) { return {}; } }
-    function saveSettings(s) { localStorage.setItem('work_settings_v6', JSON.stringify(s)); }
+    function getSettings() { try { return JSON.parse(localStorage.getItem('work_settings') || '{}'); } catch(e) { return {}; } }
+    function saveSettings(s) { localStorage.setItem('work_settings', JSON.stringify(s)); }
+
+    function clearAllHistory() {
+        if (confirm('Czy na pewno chcesz wyczyścić całą historię pracy i ustawienia? Ta operacja jest nieodwracalna!')) {
+            localStorage.removeItem('work_data');
+            localStorage.removeItem('work_extras');
+            localStorage.removeItem('work_profiles');
+            localStorage.removeItem('work_settings');
+            selectedDates = [];
+            renderProfiles();
+            renderCalendar();
+            alert('Wszystkie dane zostały wyczyszczone.');
+        }
+    }
 
     function getCurrentMonthKey() {
         return currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
@@ -559,6 +576,10 @@
         } else {
             content.classList.add('open');
             btn.innerText = '▲ Zwiń';
+            // Automatyczne płynne przewinięcie ekranu do rozwijanej sekcji
+            setTimeout(function() {
+                content.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 100);
         }
     }
 
