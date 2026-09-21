@@ -312,8 +312,8 @@
                 <span id="sumTotalLabel">RAZEM (Brutto):</span>
                 <span class="sum-val" id="sumTotal">0 zł</span>
             </div>
-            <div id="nettoHint" style="font-size:0.7rem; color:var(--text-sub); margin-top:2px; display:none;">
-                Szacowane Netto: <b id="nettoTotalVal" style="color:var(--accent-green);">0 zł</b>
+            <div id="nettoHint" style="font-size:0.75rem; color:var(--text-sub); margin-top:4px; display:none;">
+                Wyliczenie na rękę (Netto): <b id="nettoTotalVal" style="color:var(--accent-green); font-size: 0.9rem;">0 zł</b>
             </div>
         </div>
 
@@ -324,11 +324,11 @@
             </h2>
             <div class="collapsible-content" id="weryfikacjaContent">
                 <div class="sum-item">
-                    <span>Oczekiwane RAZEM:</span>
+                    <span>Oczekiwany przelew:</span>
                     <span class="sum-val" id="expectedTotal">0 zł</span>
                 </div>
                 <div class="form-group" style="margin-top: 8px;">
-                    <label>Faktycznie otrzymano (zł)</label>
+                    <label>Faktycznie otrzymano na konto (zł)</label>
                     <input type="number" id="actualReceived" placeholder="Wpisz ile dostałeś" oninput="updateSummary()">
                 </div>
                 <div class="sum-item sum-total" id="verificationResult" style="display:none; margin-top: 8px; font-size: 0.9rem;">
@@ -380,11 +380,24 @@
                 <hr style="border:0; border-top:1px solid var(--card-border); margin: 8px 0;">
 
                 <label class="checkbox-label">
-                    <input type="checkbox" id="enableNettoCheck" onchange="saveOptions()"> Pokazuj przeliczenie Brutto / Netto
+                    <input type="checkbox" id="enableNettoCheck" onchange="saveOptions()"> Pokazuj przeliczenie na rękę (Netto / ZUS)
                 </label>
-                <div class="form-group" id="taxGroup" style="display:none;">
-                    <label>Szacowany podatek / potrącenie (%)</label>
-                    <input type="number" id="taxRateInput" placeholder="12" value="12" oninput="saveOptions()">
+                
+                <div id="taxDetailsGroup" style="display:none;">
+                    <div class="form-group">
+                        <label>Rodzaj umowy / rozliczenia</label>
+                        <select id="contractTypeSelect" onchange="saveOptions()">
+                            <option value="uop">Umowa o pracę (Pełen ZUS + PIT ~26%)</option>
+                            <option value="uz_student">Umowa zlecenie (Student < 26 lat - 0% ZUS/PIT)</option>
+                            <option value="uz_normal">Umowa zlecenie (Standardowa z ZUS ~22%)</option>
+                            <option value="custom">Własny % potrąceń (ZUS + PIT)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="customTaxGroup" style="display:none;">
+                        <label>Łączny % potrąceń (ZUS + PIT)</label>
+                        <input type="number" id="taxRateInput" placeholder="25" value="25" oninput="saveOptions()">
+                    </div>
                 </div>
             </div>
         </div>
@@ -604,8 +617,12 @@
         document.getElementById('fixedDodatekValGroup').style.display = settings.isFixedDodatek ? 'block' : 'none';
 
         document.getElementById('enableNettoCheck').checked = settings.enableNetto || false;
-        document.getElementById('taxRateInput').value = settings.taxRate || 12;
-        document.getElementById('taxGroup').style.display = settings.enableNetto ? 'block' : 'none';
+        document.getElementById('contractTypeSelect').value = settings.contractType || 'uop';
+        document.getElementById('taxRateInput').value = settings.taxRate || 25;
+
+        var detailsDisplay = settings.enableNetto ? 'block' : 'none';
+        document.getElementById('taxDetailsGroup').style.display = detailsDisplay;
+        document.getElementById('customTaxGroup').style.display = (settings.enableNetto && settings.contractType === 'custom') ? 'block' : 'none';
 
         document.getElementById('manualComm').value = m.comm || '';
         document.getElementById('manualFuel').value = m.fuel || '';
@@ -622,15 +639,18 @@
         var isFixed = document.getElementById('fixedDodatekCheck').checked;
         var fixedVal = parseFloat(document.getElementById('fixedDodatekValInput').value) || 0;
         var enableNetto = document.getElementById('enableNettoCheck').checked;
+        var contractType = document.getElementById('contractTypeSelect').value;
         var taxRate = parseFloat(document.getElementById('taxRateInput').value) || 0;
 
         document.getElementById('fixedDodatekValGroup').style.display = isFixed ? 'block' : 'none';
-        document.getElementById('taxGroup').style.display = enableNetto ? 'block' : 'none';
+        document.getElementById('taxDetailsGroup').style.display = enableNetto ? 'block' : 'none';
+        document.getElementById('customTaxGroup').style.display = (enableNetto && contractType === 'custom') ? 'block' : 'none';
 
         var settings = {
             isFixedDodatek: isFixed,
             fixedDodatekVal: fixedVal,
             enableNetto: enableNetto,
+            contractType: contractType,
             taxRate: taxRate
         };
         saveSettings(settings);
@@ -640,6 +660,17 @@
         }
 
         updateSummary();
+    }
+
+    function calculateNetto(gross, contractType, customRate) {
+        if (contractType === 'uz_student') return gross;
+        
+        var effectiveTaxRate = 0;
+        if (contractType === 'uop') effectiveTaxRate = 0.26;
+        else if (contractType === 'uz_normal') effectiveTaxRate = 0.22;
+        else if (contractType === 'custom') effectiveTaxRate = (customRate || 0) / 100;
+
+        return gross * (1 - effectiveTaxRate);
     }
 
     function updateSummary() {
@@ -667,16 +698,15 @@
         document.getElementById('sumHours').innerText = hours + ' h';
         document.getElementById('sumBase').innerText = base.toFixed(2) + ' zł';
         
-        var total = base + comm + bonus + fuel;
-        document.getElementById('sumTotal').innerText = total.toFixed(2) + ' zł';
+        var totalGross = base + comm + bonus + fuel;
+        document.getElementById('sumTotal').innerText = totalGross.toFixed(2) + ' zł';
 
         var settings = getSettings();
         var nettoHint = document.getElementById('nettoHint');
         var sumTotalLabel = document.getElementById('sumTotalLabel');
 
         if (settings.enableNetto) {
-            var taxMultiplier = (100 - (settings.taxRate || 0)) / 100;
-            var nettoTotal = total * taxMultiplier;
+            var nettoTotal = calculateNetto(totalGross, settings.contractType, settings.taxRate);
             sumTotalLabel.innerText = 'RAZEM (Brutto):';
             nettoHint.style.display = 'block';
             document.getElementById('nettoTotalVal').innerText = nettoTotal.toFixed(2) + ' zł';
@@ -685,8 +715,8 @@
         } else {
             sumTotalLabel.innerText = 'RAZEM:';
             nettoHint.style.display = 'none';
-            document.getElementById('expectedTotal').innerText = total.toFixed(2) + ' zł';
-            updateVerificationResult(total, received);
+            document.getElementById('expectedTotal').innerText = totalGross.toFixed(2) + ' zł';
+            updateVerificationResult(totalGross, received);
         }
     }
 
