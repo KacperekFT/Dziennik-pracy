@@ -27,8 +27,8 @@
             background-color: var(--bg);
             color: var(--text-main);
             margin: 0;
-            /* Bezpieczny odstęp od górnej krawędzi telefonu, żeby nagłówek nie był ucięty */
-            padding: 12px 8px 8px 8px;
+            /* Zwiększony margines górny, żeby napisy w lewym górnym rogu nie były ucinane przez ekran telefonu */
+            padding: 20px 8px 8px 8px;
             -webkit-tap-highlight-color: transparent;
         }
 
@@ -334,10 +334,10 @@
             </div>
         </div>
 
-        <div class="card" style="margin-top: 8px;">
+        <div class="card" id="profilesCard" style="margin-top: 8px;">
             <h2>
                 <span>Profile Zmian</span>
-                <button class="toggle-btn" id="toggleProfilesBtn" onclick="toggleSection('profilesContent', 'toggleProfilesBtn')">▼ Rozwiń</button>
+                <button class="toggle-btn" id="toggleProfilesBtn" onclick="toggleSection('profilesContent', 'toggleProfilesBtn', 'profilesCard')">▼ Rozwiń</button>
             </h2>
             <div class="collapsible-content" id="profilesContent">
                 <div class="form-group">
@@ -359,10 +359,10 @@
             </div>
         </div>
 
-        <div class="card" style="margin-top: 8px;">
+        <div class="card" id="settingsCard" style="margin-top: 8px;">
             <h2>
                 <span>Opcje i Ustawienia</span>
-                <button class="toggle-btn" id="toggleSettingsBtn" onclick="toggleSection('settingsContent', 'toggleSettingsBtn')">▼ Rozwiń</button>
+                <button class="toggle-btn" id="toggleSettingsBtn" onclick="toggleSection('settingsContent', 'toggleSettingsBtn', 'settingsCard')">▼ Rozwiń</button>
             </h2>
             <div class="collapsible-content" id="settingsContent">
                 <label class="checkbox-label">
@@ -567,18 +567,19 @@
         renderCalendar();
     }
 
-    function toggleSection(contentId, btnId) {
+    function toggleSection(contentId, btnId, cardId) {
         var content = document.getElementById(contentId);
         var btn = document.getElementById(btnId);
+        var card = document.getElementById(cardId);
         if (content.classList.contains('open')) {
             content.classList.remove('open');
             btn.innerText = '▼ Rozwiń';
         } else {
             content.classList.add('open');
             btn.innerText = '▲ Zwiń';
-            // Automatyczne płynne przewinięcie ekranu do rozwijanej sekcji
+            // Płynne przewinięcie ekranu dokładnie do górnej krawędzi tej karty
             setTimeout(function() {
-                content.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 100);
         }
     }
