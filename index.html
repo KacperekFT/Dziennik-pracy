@@ -153,14 +153,15 @@
         }
 
         .checkbox-label {
-            display: inline-flex;
+            display: flex;
             align-items: center;
-            gap: 4px;
-            color: var(--primary);
-            font-weight: bold;
-            margin-left: 8px;
+            gap: 6px;
+            color: var(--text-main);
+            font-size: 0.8rem;
             cursor: pointer;
+            margin-bottom: 6px;
         }
+        .checkbox-label input[type="checkbox"] { width: auto; }
 
         .row { display: flex; gap: 6px; }
         .row > div { flex: 1; }
@@ -297,9 +298,7 @@
                         <input type="number" id="manualComm" placeholder="0" oninput="updateSummary()">
                     </div>
                     <div class="form-group">
-                        <label style="display: flex; align-items: center;">Dodatek (zł) 
-                            <label class="checkbox-label"><input type="checkbox" id="fixedDodatekCheck" onchange="updateSummary()" style="width: auto; margin:0;"> stały</label>
-                        </label>
+                        <label>Dodatek (zł)</label>
                         <input type="number" id="manualBonus" placeholder="0" oninput="updateSummary()">
                     </div>
                 </div>
@@ -310,8 +309,11 @@
             </div>
 
             <div class="sum-item sum-total">
-                <span>RAZEM:</span>
+                <span id="sumTotalLabel">RAZEM (Brutto):</span>
                 <span class="sum-val" id="sumTotal">0 zł</span>
+            </div>
+            <div id="nettoHint" style="font-size:0.7rem; color:var(--text-sub); margin-top:2px; display:none;">
+                Szacowane Netto: <b id="nettoTotalVal" style="color:var(--accent-green);">0 zł</b>
             </div>
         </div>
 
@@ -358,6 +360,32 @@
                 </div>
                 <button class="btn-primary" style="background: var(--accent-purple); margin-top: 4px;" onclick="saveProfile()">Dodaj profil</button>
                 <div id="profilesList" style="margin-top: 6px; font-size: 0.75rem;"></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 8px;">
+            <h2>
+                <span>Opcje i Ustawienia</span>
+                <button class="toggle-btn" id="toggleSettingsBtn" onclick="toggleSection('settingsContent', 'toggleSettingsBtn')">▼ Rozwiń</button>
+            </h2>
+            <div class="collapsible-content" id="settingsContent">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="fixedDodatekCheck" onchange="saveOptions()"> Stały dodatek co miesiąc
+                </label>
+                <div class="form-group" id="fixedDodatekValGroup" style="display:none;">
+                    <label>Kwota stałego dodatku (zł)</label>
+                    <input type="number" id="fixedDodatekValInput" placeholder="np. 200" oninput="saveOptions()">
+                </div>
+
+                <hr style="border:0; border-top:1px solid var(--card-border); margin: 8px 0;">
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="enableNettoCheck" onchange="saveOptions()"> Pokazuj przeliczenie Brutto / Netto
+                </label>
+                <div class="form-group" id="taxGroup" style="display:none;">
+                    <label>Szacowany podatek / potrącenie (%)</label>
+                    <input type="number" id="taxRateInput" placeholder="12" value="12" oninput="saveOptions()">
+                </div>
             </div>
         </div>
     </div>
@@ -438,7 +466,7 @@
             })(day);
         }
 
-        loadMonthExtras();
+        loadOptionsAndExtras();
         updateSummary();
     }
 
@@ -565,24 +593,53 @@
         renderCalendar();
     }
 
-    function loadMonthExtras() {
-        var extras = getExtras();
+    function loadOptionsAndExtras() {
         var settings = getSettings();
+        var extras = getExtras();
         var monthKey = getCurrentMonthKey();
         var m = extras[monthKey] || {};
+
+        document.getElementById('fixedDodatekCheck').checked = settings.isFixedDodatek || false;
+        document.getElementById('fixedDodatekValInput').value = settings.fixedDodatekVal || '';
+        document.getElementById('fixedDodatekValGroup').style.display = settings.isFixedDodatek ? 'block' : 'none';
+
+        document.getElementById('enableNettoCheck').checked = settings.enableNetto || false;
+        document.getElementById('taxRateInput').value = settings.taxRate || 12;
+        document.getElementById('taxGroup').style.display = settings.enableNetto ? 'block' : 'none';
 
         document.getElementById('manualComm').value = m.comm || '';
         document.getElementById('manualFuel').value = m.fuel || '';
         document.getElementById('actualReceived').value = m.received || '';
 
-        var isFixed = settings.isFixedDodatek || false;
-        document.getElementById('fixedDodatekCheck').checked = isFixed;
-
-        if (isFixed) {
-            document.getElementById('manualBonus').value = settings.fixedDodatekValue || '';
+        if (settings.isFixedDodatek) {
+            document.getElementById('manualBonus').value = settings.fixedDodatekVal || '';
         } else {
             document.getElementById('manualBonus').value = m.bonus || '';
         }
+    }
+
+    function saveOptions() {
+        var isFixed = document.getElementById('fixedDodatekCheck').checked;
+        var fixedVal = parseFloat(document.getElementById('fixedDodatekValInput').value) || 0;
+        var enableNetto = document.getElementById('enableNettoCheck').checked;
+        var taxRate = parseFloat(document.getElementById('taxRateInput').value) || 0;
+
+        document.getElementById('fixedDodatekValGroup').style.display = isFixed ? 'block' : 'none';
+        document.getElementById('taxGroup').style.display = enableNetto ? 'block' : 'none';
+
+        var settings = {
+            isFixedDodatek: isFixed,
+            fixedDodatekVal: fixedVal,
+            enableNetto: enableNetto,
+            taxRate: taxRate
+        };
+        saveSettings(settings);
+
+        if (isFixed) {
+            document.getElementById('manualBonus').value = fixedVal;
+        }
+
+        updateSummary();
     }
 
     function updateSummary() {
@@ -599,16 +656,8 @@
         }
 
         var comm = parseFloat(document.getElementById('manualComm').value) || 0;
-        var fuel = parseFloat(document.getElementById('manualFuel').value) || 0;
-        
-        var isFixed = document.getElementById('fixedDodatekCheck').checked;
         var bonus = parseFloat(document.getElementById('manualBonus').value) || 0;
-
-        var settings = getSettings();
-        settings.isFixedDodatek = isFixed;
-        if (isFixed) settings.fixedDodatekValue = bonus;
-        saveSettings(settings);
-
+        var fuel = parseFloat(document.getElementById('manualFuel').value) || 0;
         var received = parseFloat(document.getElementById('actualReceived').value) || 0;
 
         var extras = getExtras();
@@ -620,12 +669,28 @@
         
         var total = base + comm + bonus + fuel;
         document.getElementById('sumTotal').innerText = total.toFixed(2) + ' zł';
-        document.getElementById('expectedTotal').innerText = total.toFixed(2) + ' zł';
 
-        updateVerificationResult(total, received);
+        var settings = getSettings();
+        var nettoHint = document.getElementById('nettoHint');
+        var sumTotalLabel = document.getElementById('sumTotalLabel');
+
+        if (settings.enableNetto) {
+            var taxMultiplier = (100 - (settings.taxRate || 0)) / 100;
+            var nettoTotal = total * taxMultiplier;
+            sumTotalLabel.innerText = 'RAZEM (Brutto):';
+            nettoHint.style.display = 'block';
+            document.getElementById('nettoTotalVal').innerText = nettoTotal.toFixed(2) + ' zł';
+            document.getElementById('expectedTotal').innerText = nettoTotal.toFixed(2) + ' zł (Netto)';
+            updateVerificationResult(nettoTotal, received);
+        } else {
+            sumTotalLabel.innerText = 'RAZEM:';
+            nettoHint.style.display = 'none';
+            document.getElementById('expectedTotal').innerText = total.toFixed(2) + ' zł';
+            updateVerificationResult(total, received);
+        }
     }
 
-    function updateVerificationResult(total, received) {
+    function updateVerificationResult(expected, received) {
         var resBox = document.getElementById('verificationResult');
         var verifLabel = document.getElementById('verifLabel');
         var verifValue = document.getElementById('verifValue');
@@ -637,9 +702,9 @@
         }
 
         resBox.style.display = 'flex';
-        var diff = received - total;
+        var diff = received - expected;
 
-        if (diff === 0) {
+        if (Math.abs(diff) < 0.01) {
             resBox.style.borderColor = 'var(--accent-green)';
             resBox.style.background = 'rgba(16, 185, 129, 0.1)';
             verifLabel.innerText = 'Wszystko się zgadza:';
