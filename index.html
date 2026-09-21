@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dziennik Pracy</title>
+    <title>Dziennik Pracy i Zarobków</title>
     <style>
         :root {
             --bg: #0f172a;
@@ -15,6 +15,7 @@
             --accent-green: #10b981;
             --accent-amber: #f59e0b;
             --accent-purple: #8b5cf6;
+            --accent-red: #ef4444;
             --selected-day: rgba(59, 130, 246, 0.45);
         }
 
@@ -90,6 +91,7 @@
             padding: 6px 10px;
             border-radius: 6px;
             font-size: 0.8rem;
+            cursor: pointer;
         }
 
         .cal-grid {
@@ -206,16 +208,30 @@
 
         .collapsible-content { display: none; margin-top: 6px; }
         .collapsible-content.open { display: block; }
+
+        /* Status verify styles */
+        .verify-box {
+            margin-top: 8px;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-align: center;
+        }
+        .verify-ok { background: rgba(16, 185, 129, 0.2); border: 1px solid var(--accent-green); color: var(--accent-green); }
+        .verify-missing { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--accent-red); color: var(--accent-red); }
+        .verify-extra { background: rgba(59, 130, 246, 0.2); border: 1px solid var(--primary); color: #93c5fd; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h1>Dziennik Pracy</h1>
+    <h1>Dziennik Pracy i Zarobków</h1>
 </div>
 
 <div class="layout">
     <div>
+        <!-- CALENDAR CARD -->
         <div class="card">
             <div class="cal-header">
                 <button onclick="changeMonth(-1)">‹ Poprzedni</button>
@@ -237,6 +253,7 @@
             <div class="cal-grid" id="calGrid"></div>
         </div>
 
+        <!-- FORM CARD FOR SELECTED DAYS -->
         <div class="card" style="margin-top: 8px;">
             <h2>Zaznaczone dni</h2>
             <div class="selected-info" id="selectedDaysText">Kliknij dni na kalendarzu</div>
@@ -267,6 +284,7 @@
     </div>
 
     <div>
+        <!-- MONTH SUMMARY CARD -->
         <div class="card">
             <h2>Podsumowanie Miesiąca</h2>
             <div class="sum-item">
@@ -287,7 +305,7 @@
                         <input type="number" id="manualComm" placeholder="0" oninput="updateSummary()">
                     </div>
                     <div class="form-group">
-                        <label>Premia (zł)</label>
+                        <label>Dodatek (zł)</label>
                         <input type="number" id="manualBonus" placeholder="0" oninput="updateSummary()">
                     </div>
                 </div>
@@ -303,6 +321,26 @@
             </div>
         </div>
 
+        <!-- VERIFICATION COLLAPSIBLE CARD -->
+        <div class="card" style="margin-top: 8px;">
+            <h2>
+                <span>Weryfikacja Wypłaty</span>
+                <button class="toggle-btn" id="toggleVerifyBtn" onclick="toggleVerifySection()">▼ Rozwiń</button>
+            </h2>
+            <div class="collapsible-content" id="verifyContent">
+                <div class="sum-item">
+                    <span>Należy się (RAZEM):</span>
+                    <span class="sum-val" id="verifyExpected">0.00 zł</span>
+                </div>
+                <div class="form-group" style="margin-top: 8px;">
+                    <label>Otrzymana kwota (zł):</label>
+                    <input type="number" step="0.01" id="receivedAmount" placeholder="Wpisz przelew/gotówkę" oninput="verifySalary()">
+                </div>
+                <div id="verifyResult" class="verify-box verify-ok" style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- SHIFT PROFILES COLLAPSIBLE CARD -->
         <div class="card" style="margin-top: 8px;">
             <h2>
                 <span>Profile Zmian</span>
@@ -334,6 +372,7 @@
     var currentDate = new Date();
     var selectedDates = [];
 
+    // Local Storage Helper Functions
     function getData() { 
         try { return JSON.parse(localStorage.getItem('work_data_v5') || '{}'); } catch(e) { return {}; } 
     }
@@ -353,6 +392,7 @@
         return currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
     }
 
+    // Calendar logic
     function renderCalendar() {
         var grid = document.getElementById('calGrid');
         if (!grid) return;
@@ -479,6 +519,7 @@
         renderCalendar();
     }
 
+    // Toggle collapsible sections
     function toggleProfilesSection() {
         var content = document.getElementById('profilesContent');
         var btn = document.getElementById('toggleProfilesBtn');
@@ -492,6 +533,20 @@
         }
     }
 
+    function toggleVerifySection() {
+        var content = document.getElementById('verifyContent');
+        var btn = document.getElementById('toggleVerifyBtn');
+        
+        if (content.classList.contains('open')) {
+            content.classList.remove('open');
+            btn.innerText = '▼ Rozwiń';
+        } else {
+            content.classList.add('open');
+            btn.innerText = '▲ Zwiń';
+        }
+    }
+
+    // Profile Management
     function saveProfile() {
         var name = document.getElementById('profName').value;
         var hours = parseFloat(document.getElementById('profHours').value) || 0;
@@ -570,8 +625,10 @@
         document.getElementById('manualComm').value = m.comm || '';
         document.getElementById('manualBonus').value = m.bonus || '';
         document.getElementById('manualFuel').value = m.fuel || '';
+        document.getElementById('receivedAmount').value = m.received || '';
     }
 
+    // Calculations & Salary Verification
     function updateSummary() {
         var data = getData();
         var monthKey = getCurrentMonthKey();
@@ -589,9 +646,10 @@
         var comm = parseFloat(document.getElementById('manualComm').value) || 0;
         var bonus = parseFloat(document.getElementById('manualBonus').value) || 0;
         var fuel = parseFloat(document.getElementById('manualFuel').value) || 0;
+        var received = parseFloat(document.getElementById('receivedAmount').value) || '';
 
         var extras = getExtras();
-        extras[monthKey] = { comm: comm, bonus: bonus, fuel: fuel };
+        extras[monthKey] = { comm: comm, bonus: bonus, fuel: fuel, received: received };
         saveExtras(extras);
 
         document.getElementById('sumHours').innerText = hours + ' h';
@@ -599,6 +657,43 @@
         
         var total = base + comm + bonus + fuel;
         document.getElementById('sumTotal').innerText = total.toFixed(2) + ' zł';
+        document.getElementById('verifyExpected').innerText = total.toFixed(2) + ' zł';
+
+        verifySalary();
+    }
+
+    function verifySalary() {
+        var expected = parseFloat(document.getElementById('sumTotal').innerText) || 0;
+        var receivedVal = document.getElementById('receivedAmount').value;
+        var resBox = document.getElementById('verifyResult');
+
+        // Update local storage state
+        var monthKey = getCurrentMonthKey();
+        var extras = getExtras();
+        if (!extras[monthKey]) extras[monthKey] = {};
+        extras[monthKey].received = receivedVal;
+        saveExtras(extras);
+
+        if (receivedVal === '' || receivedVal === null) {
+            resBox.style.display = 'none';
+            return;
+        }
+
+        var received = parseFloat(receivedVal) || 0;
+        var diff = received - expected;
+
+        resBox.style.display = 'block';
+
+        if (Math.abs(diff) < 0.01) {
+            resBox.className = 'verify-box verify-ok';
+            resBox.innerText = 'Wypłata się zgadza! (0.00 zł)';
+        } else if (diff < 0) {
+            resBox.className = 'verify-box verify-missing';
+            resBox.innerText = 'Brakuje: ' + Math.abs(diff).toFixed(2) + ' zł!';
+        } else {
+            resBox.className = 'verify-box verify-extra';
+            resBox.innerText = 'Nadpłata: +' + diff.toFixed(2) + ' zł!';
+        }
     }
 
     window.onload = function() {
