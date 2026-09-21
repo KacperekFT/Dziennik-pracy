@@ -387,15 +387,15 @@
                     <div class="form-group">
                         <label>Rodzaj umowy / rozliczenia</label>
                         <select id="contractTypeSelect" onchange="saveOptions()">
-                            <option value="uop">Umowa o pracę (Pełen ZUS + PIT ~26%)</option>
-                            <option value="uz_student">Umowa zlecenie (Student < 26 lat - 0% ZUS/PIT)</option>
-                            <option value="uz_normal">Umowa zlecenie (Standardowa z ZUS ~22%)</option>
+                            <option value="uop">Umowa o pracę (Kalkulator składek ZUS + PIT)</option>
+                            <option value="uz_student">Umowa zlecenie (Student < 26 lat - 0% potrąceń)</option>
+                            <option value="uz_normal">Umowa zlecenie (Standardowy szacunek ZUS ~22%)</option>
                             <option value="custom">Własny % potrąceń (ZUS + PIT)</option>
                         </select>
                     </div>
 
                     <div class="form-group" id="customTaxGroup" style="display:none;">
-                        <label>Łączny % potrąceń (ZUS + PIT)</label>
+                        <label>Łączny % potrąceń</label>
                         <input type="number" id="taxRateInput" placeholder="25" value="25" oninput="saveOptions()">
                     </div>
                 </div>
@@ -665,12 +665,38 @@
     function calculateNetto(gross, contractType, customRate) {
         if (contractType === 'uz_student') return gross;
         
-        var effectiveTaxRate = 0;
-        if (contractType === 'uop') effectiveTaxRate = 0.26;
-        else if (contractType === 'uz_normal') effectiveTaxRate = 0.22;
-        else if (contractType === 'custom') effectiveTaxRate = (customRate || 0) / 100;
+        if (contractType === 'uop') {
+            // Realistyczne wyliczenie dla UoP:
+            // 1. Składki społeczne pracownika: emerytalna (9.76%), rentowa (1.5%), chorobowa (2.45%) = 13.71%
+            var zusSpoleczne = gross * 0.1371;
+            var podstawaZdrowotna = gross - zusSpoleczne;
+            
+            // 2. Składka zdrowotna: 9% od podstawy po odliczeniu społecznych
+            var skladkaZdrowotna = podstawaZdrowotna * 0.09;
+            
+            // 3. Podstawa opodatkowania (uproszczona, koszty uzyskania przychodu ~250 zł)
+            var podstawaOpodatkowania = podstawaZdrowotna - 250;
+            if (podstawaOpodatkowania < 0) podstawaOpodatkowania = 0;
+            
+            // 4. Zaliczka na PIT 12% minus kwota zmniejszająca podatek (300 zł)
+            var zaliczkaPit = (podstawaOpodatkowania * 0.12) - 300;
+            if (zaliczkaPit < 0) zaliczkaPit = 0;
+            
+            var netto = gross - zusSpoleczne - skladkaZdrowotna - zaliczkaPit;
+            return netto > 0 ? netto : 0;
+        }
+        
+        if (contractType === 'uz_normal') {
+            // Standardowa umowa zlecenie z ZUS i podatkiem (szacunek ok. 22%)
+            return gross * 0.78;
+        }
+        
+        if (contractType === 'custom') {
+            var effectiveTaxRate = (customRate || 0) / 100;
+            return gross * (1 - effectiveTaxRate);
+        }
 
-        return gross * (1 - effectiveTaxRate);
+        return gross;
     }
 
     function updateSummary() {
