@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Zarządzania Zmianami</title>
+    <title>Kalendarz Zmianowy</title>
     <style>
         :root {
             --primary: #4f46e5;
@@ -27,46 +27,36 @@
         }
 
         .container {
-            max-width: 600px;
+            max-width: 800px;
             margin: 0 auto;
             background: var(--card-bg);
             padding: 20px;
             border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
-        h1 {
-            font-size: 1.5rem;
-            margin-top: 0;
-            margin-bottom: 20px;
+        h1, h2 {
             color: var(--primary);
             text-align: center;
         }
 
-        h2 {
-            font-size: 1.2rem;
-            margin-top: 20px;
-            border-bottom: 2px solid var(--border);
-            padding-bottom: 8px;
+        .section {
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
         }
 
-        .form-group {
-            margin-bottom: 12px;
-        }
-
-        label {
-            display: block;
-            font-size: 0.9rem;
-            margin-bottom: 4px;
-            font-weight: 600;
+        .form-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
         }
 
         input, select {
-            width: 100%;
+            flex: 1;
             padding: 10px;
             border: 1px solid var(--border);
             border-radius: 6px;
-            box-sizing: border-box;
             font-size: 1rem;
         }
 
@@ -78,9 +68,7 @@
             border-radius: 6px;
             cursor: pointer;
             font-size: 1rem;
-            width: 100%;
             font-weight: 600;
-            margin-top: 5px;
             transition: background-color 0.2s;
         }
 
@@ -88,37 +76,37 @@
             background-color: var(--primary-hover);
         }
 
-        .item-list {
-            list-style: none;
-            padding: 0;
-            margin: 15px 0;
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            margin-top: 15px;
         }
 
-        .item-card {
+        .calendar-day {
             background: #f9fafb;
             border: 1px solid var(--border);
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 8px;
+            border-radius: 6px;
+            padding: 10px 6px;
+            text-align: center;
+            min-height: 60px;
             display: flex;
+            flex-direction: column;
             justify-content: space-between;
-            align-items: center;
         }
 
-        .item-info {
-            font-size: 0.95rem;
-        }
-
-        .delete-btn {
-            background-color: var(--danger);
-            width: auto;
-            padding: 6px 12px;
+        .calendar-day span {
             font-size: 0.85rem;
-            margin-top: 0;
+            font-weight: bold;
         }
 
-        .delete-btn:hover {
-            background-color: var(--danger-hover);
+        .shift-tag {
+            font-size: 0.75rem;
+            background: #e0e7ff;
+            color: #3730a3;
+            padding: 2px 4px;
+            border-radius: 4px;
+            margin-top: 4px;
         }
 
         .expandable-section {
@@ -130,7 +118,7 @@
 
         .expandable-header {
             background: #f8fafc;
-            padding: 12px 16px;
+            padding: 14px 16px;
             cursor: pointer;
             font-weight: 600;
             display: flex;
@@ -149,9 +137,9 @@
             display: block;
         }
 
-        /* Kluczowy element: przestrzeń na dole dla wygody klikania na telefonach */
+        /* Ogromny zapas miejsca na samym dole pod telefon */
         .bottom-spacer {
-            height: 150px;
+            height: 180px;
             width: 100%;
         }
     </style>
@@ -159,137 +147,101 @@
 <body>
 
     <div class="container">
-        <h1>System Zmianowy</h1>
+        <h1>Harmonogram i Kalendarz Zmian</h1>
 
-        <!-- Sekcja Typów Dnia -->
+        <!-- Sekcja Profili i Typów Dnia -->
         <div class="section">
-            <h2>Typy Dnia</h2>
-            <div class="form-group">
-                <label for="dayTypeName">Nazwa typu dnia (np. Dzień roboczy, Święto)</label>
-                <input type="text" id="dayTypeName" placeholder="Wpisz nazwę...">
+            <h2>Konfiguracja Zmian</h2>
+            <div class="form-row">
+                <input type="text" id="profileNameInput" placeholder="Nazwa profilu (np. Rano, Popołudnie)">
+                <button onclick="addProfile()">Dodaj Profil</button>
             </div>
-            <button onclick="addDayType()">Dodaj Typ Dnia</button>
-            <ul id="dayTypesList" class="item-list"></ul>
+            <div id="profilesList" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;"></div>
         </div>
 
-        <!-- Sekcja Profilów Zmian -->
+        <!-- Sekcja Kalendarza -->
         <div class="section">
-            <h2>Profile Zmian</h2>
-            <div class="form-group">
-                <label for="profileName">Nazwa profilu (np. Produkcja 3-zmianowa)</label>
-                <input type="text" id="profileName" placeholder="Wpisz nazwę profilu...">
-            </div>
-            <div class="form-group">
-                <label for="associatedDayType">Powiązany Typ Dnia</label>
-                <select id="associatedDayType">
-                    <-- Opcje ładowane dynamicznie -->
-                </select>
-            </div>
-            <button onclick="addShiftProfile()">Dodaj Profil Zmian</button>
-            <ul id="shiftProfilesList" class="item-list"></ul>
+            <h2>Kalendarz (Bieżący Miesiąc)</h2>
+            <p style="font-size: 0.9rem; color: var(--text-light); text-align: center;">Kliknij na dzień, aby przypisać profil zmian.</p>
+            <div class="calendar-grid" id="calendarGrid"></div>
         </div>
 
-        <!-- Ostatnie okno / Rozwijane menu na samym dole -->
+        <!-- Rozwijane menu na samym dole – teraz ma mnóstwo miejsca pod spodem na telefonie -->
         <div class="expandable-section">
             <div class="expandable-header" onclick="toggleExpand()">
-                <span>Ostatnie okno / Konfiguracja zaawansowana</span>
+                <span>Ostatnie okno / Ustawienia zaawansowane</span>
                 <span id="expandIcon">▼</span>
             </div>
             <div class="expandable-content" id="expandContent">
-                <p style="color: var(--text-light); margin-top: 0;">Tutaj możesz zarządzać dodatkowymi ustawieniami widoku lub podsumowaniem zmian.</p>
-                <button onclick="alert('Wykonano akcję z ostatniego okna!')">Zatwierdź zmiany</button>
+                <p style="margin-top: 0; color: var(--text-light);">Zarządzaj dodatkowymi opcjami, eksportem lub podsumowaniem.</p>
+                <button onclick="alert('Wykonano akcję z ostatniego okna!')" style="width: 100%;">Zatwierdź ustawienia</button>
             </div>
         </div>
 
     </div>
 
-    <!-- Puste miejsce na dole, aby ułatwić klikanie na telefonie -->
+    <!-- Przestrzeń na dole zapobiegająca problemom z klikaniem na telefonach -->
     <div class="bottom-spacer"></div>
 
     <script>
-        // Stan aplikacji w pamięci przeglądarki
-        let dayTypes = JSON.parse(localStorage.getItem('dayTypes')) || ['Dzień roboczy', 'Sobota', 'Niedziela'];
-        let shiftProfiles = JSON.parse(localStorage.getItem('shiftProfiles')) || [];
+        let profiles = JSON.parse(localStorage.getItem('shift_profiles')) || ['Rano', 'Popołudnie', 'Noc', 'Wolne'];
+        let schedule = JSON.parse(localStorage.getItem('shift_schedule')) || {};
 
         function saveData() {
-            localStorage.setItem('dayTypes', JSON.stringify(dayTypes));
-            localStorage.setItem('shiftProfiles', JSON.stringify(shiftProfiles));
+            localStorage.setItem('shift_profiles', JSON.stringify(profiles));
+            localStorage.setItem('shift_schedule', JSON.stringify(schedule));
         }
 
-        function render() {
-            // Renderowanie typów dnia
-            const dayTypesList = document.getElementById('dayTypesList');
-            const associatedDayTypeSelect = document.getElementById('associatedDayType');
-            
-            dayTypesList.innerHTML = '';
-            associatedDayTypeSelect.innerHTML = '';
-
-            dayTypes.forEach((dt, index) => {
-                // Lista
-                dayTypesList.innerHTML += `
-                    <li class="item-card">
-                        <span class="item-info">📅 ${dt}</span>
-                        <button class="delete-btn" onclick="deleteDayType(${index})">Usuń</button>
-                    </li>
-                `;
-                // Select
-                associatedDayTypeSelect.innerHTML += `<option value="${dt}">${dt}</option>`;
-            });
-
-            // Renderowanie profili zmian
-            const shiftProfilesList = document.getElementById('shiftProfilesList');
-            shiftProfilesList.innerHTML = '';
-
-            shiftProfiles.forEach((sp, index) => {
-                shiftProfilesList.innerHTML += `
-                    <li class="item-card">
-                        <span class="item-info">⚙️ <strong>${sp.name}</strong> <br><small style="color:var(--text-light)">Typ: ${sp.dayType}</small></span>
-                        <button class="delete-btn" onclick="deleteShiftProfile(${index})">Usuń</button>
-                    </li>
-                `;
+        function renderProfiles() {
+            const container = document.getElementById('profilesList');
+            container.innerHTML = '';
+            profiles.forEach((p, index) => {
+                container.innerHTML += `<span style="background:#e0e7ff; color:#3730a3; padding:6px 12px; border-radius:6px; font-size:0.9rem; display:inline-flex; align-items:center; gap:6px;">
+                    ${p} <b onclick="deleteProfile(${index})" style="cursor:pointer; color:#ef4444;">&times;</b>
+                </span>`;
             });
         }
 
-        function addDayType() {
-            const input = document.getElementById('dayTypeName');
-            const value = input.value.trim();
-            if (value && !dayTypes.includes(value)) {
-                dayTypes.push(value);
+        function addProfile() {
+            const input = document.getElementById('profileNameInput');
+            const val = input.value.trim();
+            if(val && !profiles.includes(val)) {
+                profiles.push(val);
                 input.value = '';
                 saveData();
-                render();
-            } else {
-                alert('Wpisz poprawną lub unikalną nazwę typu dnia.');
+                renderProfiles();
             }
         }
 
-        function deleteDayType(index) {
-            dayTypes.splice(index, 1);
+        function deleteProfile(index) {
+            profiles.splice(index, 1);
             saveData();
-            render();
+            renderProfiles();
         }
 
-        function addShiftProfile() {
-            const nameInput = document.getElementById('profileName');
-            const dayTypeSelect = document.getElementById('associatedDayType');
+        function renderCalendar() {
+            const grid = document.getElementById('calendarGrid');
+            grid.innerHTML = '';
             
-            const name = nameInput.value.trim();
-            const dayType = dayTypeSelect.value;
-
-            if (name && dayType) {
-                shiftProfiles.push({ name, dayType });
-                nameInput.value = '';
-                saveData();
-                render();
-            } else {
-                alert('Wpisz nazwę profilu zmian.');
+            // Przykładowy miesiąc 30 dni
+            for(let i = 1; i <= 30; i++) {
+                const shift = schedule[i] || '-';
+                grid.innerHTML += `
+                    <div class="calendar-day" onclick="changeDayShift(${i})">
+                        <span>${i}</span>
+                        <div class="shift-tag">${shift}</div>
+                    </div>
+                `;
             }
         }
 
-        function deleteShiftProfile(index) {
-            shiftProfiles.splice(index, 1);
+        function changeDayShift(day) {
+            let current = schedule[day] || 'Brak';
+            let nextIndex = profiles.indexOf(current) + 1;
+            if (nextIndex >= profiles.length) nextIndex = 0;
+            schedule[day] = profiles[nextIndex] || profiles[0];
             saveData();
-            render();
+            renderCalendar();
         }
 
         function toggleExpand() {
@@ -299,8 +251,9 @@
             icon.textContent = content.classList.contains('active') ? '▲' : '▼';
         }
 
-        // Inicjalizacja przy starcie
-        render();
+        // Inicjalizacja
+        renderProfiles();
+        renderCalendar();
     </script>
 </body>
 </html>
