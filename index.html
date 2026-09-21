@@ -3,53 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Zmianowy</title>
+    <title>System Zarządzania Zmianami</title>
     <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg: #f3f4f6;
+            --card-bg: #ffffff;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --border: #e5e7eb;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --success: #10b981;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
             margin: 0;
-            padding: 20px;
-            background-color: #f4f4f9;
-            color: #333;
+            padding: 16px;
         }
-        h1, h2 {
-            color: #2c3e50;
-        }
+
         .container {
-            max-width: 800px;
+            max-width: 600px;
             margin: 0 auto;
-            background: #fff;
+            background: var(--card-bg);
             padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
-        .section {
+
+        h1 {
+            font-size: 1.5rem;
+            margin-top: 0;
             margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
+            color: var(--primary);
+            text-align: center;
         }
+
+        h2 {
+            font-size: 1.2rem;
+            margin-top: 20px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+
         button {
-            padding: 10px 15px;
-            background-color: #3498db;
+            background-color: var(--primary);
             color: white;
             border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        button:hover {
-            background-color: #2980b9;
-        }
-        .card {
-            background: #f9f9f9;
-            border: 1px solid #ddd;
-            padding: 15px;
+            padding: 10px 16px;
             border-radius: 6px;
-            margin-bottom: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+            width: 100%;
+            font-weight: 600;
+            margin-top: 5px;
+            transition: background-color 0.2s;
         }
-        /* KLUCZOWE: Dodatkowy pusty obszar na samym dole strony specjalnie dla telefonów */
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .item-list {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0;
+        }
+
+        .item-card {
+            background: #f9fafb;
+            border: 1px solid var(--border);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .item-info {
+            font-size: 0.95rem;
+        }
+
+        .delete-btn {
+            background-color: var(--danger);
+            width: auto;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            margin-top: 0;
+        }
+
+        .delete-btn:hover {
+            background-color: var(--danger-hover);
+        }
+
+        .expandable-section {
+            margin-top: 20px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .expandable-header {
+            background: #f8fafc;
+            padding: 12px 16px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .expandable-content {
+            padding: 16px;
+            display: none;
+            border-top: 1px solid var(--border);
+            background: #fff;
+        }
+
+        .expandable-content.active {
+            display: block;
+        }
+
+        /* Kluczowy element: przestrzeń na dole dla wygody klikania na telefonach */
         .bottom-spacer {
-            height: 120px;
+            height: 150px;
             width: 100%;
         }
     </style>
@@ -57,26 +159,148 @@
 <body>
 
     <div class="container">
-        <h1>Panel Zarządzania Zmianami</h1>
-        
-        <div class="section" id="profiles-section">
-            <h2>Profile Zmian</h2>
-            <p>Zarządzaj profilami zmian przypisywanymi do typów dni.</p>
-            <button onclick="alert('Dodawanie profilu')">Dodaj profil zmian</button>
+        <h1>System Zmianowy</h1>
+
+        <!-- Sekcja Typów Dnia -->
+        <div class="section">
+            <h2>Typy Dnia</h2>
+            <div class="form-group">
+                <label for="dayTypeName">Nazwa typu dnia (np. Dzień roboczy, Święto)</label>
+                <input type="text" id="dayTypeName" placeholder="Wpisz nazwę...">
+            </div>
+            <button onclick="addDayType()">Dodaj Typ Dnia</button>
+            <ul id="dayTypesList" class="item-list"></ul>
         </div>
 
-        <div class="section" id="schedule-section">
-            <h2>Ostatnie Okno / Harmonogram</h2>
-            <div class="card">
-                <p>Szczegóły ostatniego elementu listy...</p>
-                <!-- Przycisk umieszczony nisko, ale dzięki .bottom-spacer pod spodem da się łatwo kliknąć -->
-                <button onclick="alert('Rozwinięto ostatnie okno!')">Rozwiń</button>
+        <!-- Sekcja Profilów Zmian -->
+        <div class="section">
+            <h2>Profile Zmian</h2>
+            <div class="form-group">
+                <label for="profileName">Nazwa profilu (np. Produkcja 3-zmianowa)</label>
+                <input type="text" id="profileName" placeholder="Wpisz nazwę profilu...">
+            </div>
+            <div class="form-group">
+                <label for="associatedDayType">Powiązany Typ Dnia</label>
+                <select id="associatedDayType">
+                    <-- Opcje ładowane dynamicznie -->
+                </select>
+            </div>
+            <button onclick="addShiftProfile()">Dodaj Profil Zmian</button>
+            <ul id="shiftProfilesList" class="item-list"></ul>
+        </div>
+
+        <!-- Ostatnie okno / Rozwijane menu na samym dole -->
+        <div class="expandable-section">
+            <div class="expandable-header" onclick="toggleExpand()">
+                <span>Ostatnie okno / Konfiguracja zaawansowana</span>
+                <span id="expandIcon">▼</span>
+            </div>
+            <div class="expandable-content" id="expandContent">
+                <p style="color: var(--text-light); margin-top: 0;">Tutaj możesz zarządzać dodatkowymi ustawieniami widoku lub podsumowaniem zmian.</p>
+                <button onclick="alert('Wykonano akcję z ostatniego okna!')">Zatwierdź zmiany</button>
             </div>
         </div>
+
     </div>
 
-    <!-- Puste miejsce na dole widoczne głównie na urządzeniach mobilnych -->
+    <!-- Puste miejsce na dole, aby ułatwić klikanie na telefonie -->
     <div class="bottom-spacer"></div>
 
+    <script>
+        // Stan aplikacji w pamięci przeglądarki
+        let dayTypes = JSON.parse(localStorage.getItem('dayTypes')) || ['Dzień roboczy', 'Sobota', 'Niedziela'];
+        let shiftProfiles = JSON.parse(localStorage.getItem('shiftProfiles')) || [];
+
+        function saveData() {
+            localStorage.setItem('dayTypes', JSON.stringify(dayTypes));
+            localStorage.setItem('shiftProfiles', JSON.stringify(shiftProfiles));
+        }
+
+        function render() {
+            // Renderowanie typów dnia
+            const dayTypesList = document.getElementById('dayTypesList');
+            const associatedDayTypeSelect = document.getElementById('associatedDayType');
+            
+            dayTypesList.innerHTML = '';
+            associatedDayTypeSelect.innerHTML = '';
+
+            dayTypes.forEach((dt, index) => {
+                // Lista
+                dayTypesList.innerHTML += `
+                    <li class="item-card">
+                        <span class="item-info">📅 ${dt}</span>
+                        <button class="delete-btn" onclick="deleteDayType(${index})">Usuń</button>
+                    </li>
+                `;
+                // Select
+                associatedDayTypeSelect.innerHTML += `<option value="${dt}">${dt}</option>`;
+            });
+
+            // Renderowanie profili zmian
+            const shiftProfilesList = document.getElementById('shiftProfilesList');
+            shiftProfilesList.innerHTML = '';
+
+            shiftProfiles.forEach((sp, index) => {
+                shiftProfilesList.innerHTML += `
+                    <li class="item-card">
+                        <span class="item-info">⚙️ <strong>${sp.name}</strong> <br><small style="color:var(--text-light)">Typ: ${sp.dayType}</small></span>
+                        <button class="delete-btn" onclick="deleteShiftProfile(${index})">Usuń</button>
+                    </li>
+                `;
+            });
+        }
+
+        function addDayType() {
+            const input = document.getElementById('dayTypeName');
+            const value = input.value.trim();
+            if (value && !dayTypes.includes(value)) {
+                dayTypes.push(value);
+                input.value = '';
+                saveData();
+                render();
+            } else {
+                alert('Wpisz poprawną lub unikalną nazwę typu dnia.');
+            }
+        }
+
+        function deleteDayType(index) {
+            dayTypes.splice(index, 1);
+            saveData();
+            render();
+        }
+
+        function addShiftProfile() {
+            const nameInput = document.getElementById('profileName');
+            const dayTypeSelect = document.getElementById('associatedDayType');
+            
+            const name = nameInput.value.trim();
+            const dayType = dayTypeSelect.value;
+
+            if (name && dayType) {
+                shiftProfiles.push({ name, dayType });
+                nameInput.value = '';
+                saveData();
+                render();
+            } else {
+                alert('Wpisz nazwę profilu zmian.');
+            }
+        }
+
+        function deleteShiftProfile(index) {
+            shiftProfiles.splice(index, 1);
+            saveData();
+            render();
+        }
+
+        function toggleExpand() {
+            const content = document.getElementById('expandContent');
+            const icon = document.getElementById('expandIcon');
+            content.classList.toggle('active');
+            icon.textContent = content.classList.contains('active') ? '▲' : '▼';
+        }
+
+        // Inicjalizacja przy starcie
+        render();
+    </script>
 </body>
 </html>
