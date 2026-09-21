@@ -27,7 +27,6 @@
             background-color: var(--bg);
             color: var(--text-main);
             margin: 0;
-            /* Bezpieczny margines górny, żeby napisy nie były ucinane */
             padding: 24px 8px 8px 8px;
             -webkit-tap-highlight-color: transparent;
         }
@@ -129,6 +128,7 @@
         .cal-day.selected { background: var(--selected-day); border-color: var(--primary); }
         .cal-day.today { border: 1.5px solid var(--accent-amber); }
         .cal-day.weekend { opacity: 0.6; background: #090d16; }
+        .cal-day.invalid { border-color: var(--accent-rose); }
 
         .day-num { font-size: 0.7rem; font-weight: bold; }
         .day-info { display: flex; flex-direction: column; gap: 1px; }
@@ -146,6 +146,7 @@
         .badge-urlop { background: rgba(6, 182, 212, 0.3); color: #67e8f9; }
         .badge-l4 { background: rgba(244, 63, 94, 0.3); color: #fda4af; }
         .badge-bezpl { background: rgba(148, 163, 184, 0.3); color: #cbd5e1; }
+        .badge-warn { background: rgba(245, 158, 11, 0.3); color: #fcd34d; }
 
         .form-group { margin-bottom: 6px; }
         label { display: block; font-size: 0.7rem; color: var(--text-sub); margin-bottom: 2px; }
@@ -184,6 +185,7 @@
             font-size: 0.85rem;
             cursor: pointer;
         }
+        button.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
         button.btn-secondary {
             background: var(--card-border);
@@ -224,6 +226,48 @@
 
         .collapsible-content { display: none; margin-top: 6px; }
         .collapsible-content.open { display: block; }
+
+        .netto-disclaimer {
+            font-size: 0.65rem;
+            color: var(--text-sub);
+            margin-top: 4px;
+            line-height: 1.3;
+        }
+
+        .profile-row {
+            display:flex; justify-content:space-between; align-items:center;
+            margin-top:4px; background:#0f172a; padding:4px 6px; border-radius:4px; gap:4px;
+        }
+        .profile-row .profile-actions { display:flex; gap:4px; flex-shrink:0; }
+        .profile-row button {
+            border:none; border-radius:3px; padding:2px 6px; font-size:0.65rem; cursor:pointer; color:white;
+        }
+        .btn-edit { background:#3b82f6; }
+        .btn-del { background:#ef4444; }
+
+        .toast {
+            position: fixed;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            z-index: 1000;
+            max-width: 90%;
+            text-align: center;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.error { border-color: var(--accent-rose); }
     </style>
 </head>
 <body>
@@ -240,7 +284,7 @@
                 <h2 id="calMonthTitle" style="margin:0; font-size: 0.85rem;">Miesiąc</h2>
                 <button onclick="changeMonth(1)">Następny ›</button>
             </div>
-            
+
             <button class="btn-secondary" id="selectAllBtn" onclick="toggleSelectAllWorkdays()">Zaznacz robocze (bez weekendów)</button>
 
             <div class="cal-grid">
@@ -258,7 +302,7 @@
         <div class="card" style="margin-top: 8px;">
             <h2>Zaznaczone dni</h2>
             <div class="selected-info" id="selectedDaysText">Kliknij dni na kalendarzu</div>
-            
+
             <div class="form-group">
                 <label>Typ Dnia / Status</label>
                 <select id="dayTypeSelect" onchange="handleDayTypeChange()">
@@ -279,11 +323,13 @@
             <div class="row" id="workInputRow">
                 <div class="form-group">
                     <label>Godziny</label>
-                    <input type="number" step="0.5" id="inputHours" placeholder="8">
+                    <input type="number" step="0.5" min="0" id="inputHours" placeholder="8" list="hoursSuggestions">
+                    <datalist id="hoursSuggestions"></datalist>
                 </div>
                 <div class="form-group">
                     <label>Stawka/h (zł)</label>
-                    <input type="number" step="0.01" id="inputRate" placeholder="31.40">
+                    <input type="number" step="0.01" min="0" id="inputRate" placeholder="31.40" list="rateSuggestions">
+                    <datalist id="rateSuggestions"></datalist>
                 </div>
             </div>
 
@@ -308,7 +354,7 @@
 
             <div style="margin-top: 8px; border-top: 1px dashed var(--card-border); padding-top: 6px;">
                 <label style="color: var(--accent-amber); font-weight: bold;">Dodatki do miesiąca:</label>
-                
+
                 <div class="row" style="margin-top: 4px;">
                     <div class="form-group">
                         <label>Prowizja (zł)</label>
@@ -331,6 +377,7 @@
             </div>
             <div id="nettoHint" style="font-size:0.75rem; color:var(--text-sub); margin-top:4px; display:none;">
                 Wyliczenie na rękę (Netto): <b id="nettoTotalVal" style="color:var(--accent-green); font-size: 0.9rem;">0 zł</b>
+                <div class="netto-disclaimer" id="nettoDisclaimer">Wyliczenie orientacyjne — nie uwzględnia PPK, kwoty wolnej rozliczanej rocznie ani ulg spoza wybranych opcji. Nie traktuj jako oficjalnej listy płac.</div>
             </div>
         </div>
 
@@ -347,14 +394,14 @@
                 <div class="row">
                     <div class="form-group">
                         <label>Godziny</label>
-                        <input type="number" step="0.5" id="profHours" placeholder="8">
+                        <input type="number" step="0.5" min="0" id="profHours" placeholder="8">
                     </div>
                     <div class="form-group">
                         <label>Stawka/h (zł)</label>
-                        <input type="number" step="0.01" id="profRate" placeholder="31.40">
+                        <input type="number" step="0.01" min="0" id="profRate" placeholder="31.40">
                     </div>
                 </div>
-                <button class="btn-primary" style="background: var(--accent-purple); margin-top: 4px;" onclick="saveProfile()">Dodaj profil</button>
+                <button class="btn-primary" style="background: var(--accent-purple); margin-top: 4px;" id="profSaveBtn" onclick="saveProfile()">Dodaj profil</button>
                 <div id="profilesList" style="margin-top: 8px; font-size: 0.75rem;"></div>
             </div>
         </div>
@@ -378,13 +425,13 @@
                 <label class="checkbox-label">
                     <input type="checkbox" id="enableNettoCheck" onchange="saveOptions()"> Pokazuj przeliczenie na rękę (Netto / ZUS)
                 </label>
-                
+
                 <div id="taxDetailsGroup" style="display:none;">
                     <div class="form-group">
                         <label>Rodzaj umowy / rozliczenia</label>
                         <select id="contractTypeSelect" onchange="saveOptions()">
                             <option value="uop">Umowa o pracę (Kalkulator składek ZUS + PIT)</option>
-                            <option value="uz_student">Umowa zlecenie (Student < 26 lat - 0% potrąceń)</option>
+                            <option value="uz_student">Umowa zlecenie (Student &lt; 26 lat - 0% potrąceń)</option>
                             <option value="uz_normal">Umowa zlecenie (Standardowy szacunek ZUS ~22%)</option>
                             <option value="custom">Własny % potrąceń (ZUS + PIT)</option>
                         </select>
@@ -394,7 +441,29 @@
                         <label>Łączny % potrąceń</label>
                         <input type="number" id="taxRateInput" placeholder="25" value="25" oninput="saveOptions()">
                     </div>
+
+                    <div id="youngReliefGroup" style="display:none;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="youngReliefCheck" onchange="saveOptions()"> Ulga dla młodych (&lt; 26 lat) — 0% PIT
+                        </label>
+                    </div>
+
+                    <div id="advancedModeGroup" style="display:none;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="advancedModeCheck" onchange="saveOptions()"> Tryb zaawansowany: II próg podatkowy (32% powyżej 120 000 zł/rok, liczone narastająco od stycznia)
+                        </label>
+                        <div class="netto-disclaimer">Próg liczony kumulatywnie na podstawie danych wpisanych w tej appce dla bieżącego roku kalendarzowego — jeśli część roku rozliczałeś/aś gdzie indziej, wynik będzie zaniżony.</div>
+                    </div>
                 </div>
+
+                <hr style="border:0; border-top:1px solid var(--card-border); margin: 8px 0;">
+
+                <label style="display:block; font-size:0.75rem; color:var(--text-sub); margin-bottom:6px;">Kopia zapasowa danych:</label>
+                <div class="row">
+                    <button class="btn-secondary" style="margin-bottom:0;" onclick="exportData()">⬇ Eksportuj dane</button>
+                    <button class="btn-secondary" style="margin-bottom:0;" onclick="document.getElementById('importFileInput').click()">⬆ Importuj dane</button>
+                </div>
+                <input type="file" id="importFileInput" accept="application/json" style="display:none;" onchange="importData(event)">
 
                 <hr style="border:0; border-top:1px solid var(--card-border); margin: 8px 0;">
                 <button class="btn-secondary" style="background: rgba(244, 63, 94, 0.2); color: var(--accent-rose); border: 1px solid var(--accent-rose);" onclick="clearAllHistory()">Wyczyść całą historię danych</button>
@@ -403,13 +472,17 @@
     </div>
 </div>
 
+<div class="toast" id="toast"></div>
+
 <script>
     var currentDate = new Date();
     var selectedDates = [];
+    var editingProfileId = null;
 
+    // ---------- Storage helpers ----------
     function getData() { try { return JSON.parse(localStorage.getItem('work_data') || '{}'); } catch(e) { return {}; } }
     function saveData(data) { localStorage.setItem('work_data', JSON.stringify(data)); }
-    
+
     function getExtras() { try { return JSON.parse(localStorage.getItem('work_extras') || '{}'); } catch(e) { return {}; } }
     function saveExtras(extras) { localStorage.setItem('work_extras', JSON.stringify(extras)); }
 
@@ -419,6 +492,87 @@
     function getSettings() { try { return JSON.parse(localStorage.getItem('work_settings') || '{}'); } catch(e) { return {}; } }
     function saveSettings(s) { localStorage.setItem('work_settings', JSON.stringify(s)); }
 
+    function getLastUsed() { try { return JSON.parse(localStorage.getItem('work_last_used') || '{}'); } catch(e) { return {}; } }
+    function saveLastUsed(hours, rate) { localStorage.setItem('work_last_used', JSON.stringify({ hours: hours, rate: rate })); }
+
+    // ---------- Utilities ----------
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = String(str == null ? '' : str);
+        return div.innerHTML;
+    }
+
+    // Podsumowania pokazujemy z groszami (bez zaokrąglania) — tylko małe "znaczki"
+    // w komórkach kalendarza są zaokrąglane, bo mają za mało miejsca na pełną kwotę.
+    var currencyFmt = new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function formatMoney(val) {
+        return currencyFmt.format(val || 0);
+    }
+
+    var toastTimer = null;
+    function showToast(msg, isError) {
+        var t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast show' + (isError ? ' error' : '');
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(function() { t.className = 'toast'; }, 2600);
+    }
+
+    // ---------- Podpowiedzi (datalist) dla pól Godziny / Stawka ----------
+    // Klik w pole -> pokazuje się lista -> klik w wartość -> wpisuje się sama (2 kliknięcia).
+    function refreshSuggestions() {
+        var profiles = getProfiles();
+        var lastUsed = getLastUsed();
+
+        var hoursSet = [];
+        var ratesSet = [];
+
+        function addUnique(arr, val) {
+            val = Number(val);
+            if (!val || arr.indexOf(val) > -1) return;
+            arr.push(val);
+        }
+
+        // Ostatnio użyte na górze listy
+        if (lastUsed.hours) addUnique(hoursSet, lastUsed.hours);
+        if (lastUsed.rate) addUnique(ratesSet, lastUsed.rate);
+
+        profiles.forEach(function(p) {
+            addUnique(hoursSet, p.hours);
+            addUnique(ratesSet, p.rate);
+        });
+
+        [8, 4, 12, 6].forEach(function(h) { addUnique(hoursSet, h); });
+        if (ratesSet.length === 0) addUnique(ratesSet, 31.40);
+
+        var hoursList = document.getElementById('hoursSuggestions');
+        var ratesList = document.getElementById('rateSuggestions');
+        if (hoursList) hoursList.innerHTML = hoursSet.map(function(v) { return '<option value="' + v + '">'; }).join('');
+        if (ratesList) ratesList.innerHTML = ratesSet.map(function(v) { return '<option value="' + v + '">'; }).join('');
+    }
+
+    // Wstępnie wypełnia puste pola ostatnio użytymi wartościami, żeby nie trzeba
+    // było wpisywać ich ręcznie za każdym razem.
+    function prefillLastUsed() {
+        var lastUsed = getLastUsed();
+        var hoursEl = document.getElementById('inputHours');
+        var rateEl = document.getElementById('inputRate');
+        if (hoursEl && !hoursEl.value && lastUsed.hours) hoursEl.value = lastUsed.hours;
+        if (rateEl && !rateEl.value && lastUsed.rate) rateEl.value = lastUsed.rate;
+    }
+
+    // ---------- Earnings calculation (single source of truth) ----------
+    function calculateEarn(entry) {
+        if (!entry) return 0;
+        var t = entry.type || 'work';
+        var h = entry.hours || 0;
+        var r = entry.rate || 0;
+        if (t === 'work' || t === 'urlop') return h * r;
+        if (t === 'l4') return (h * r) * 0.8;
+        return 0; // bezplatny
+    }
+
+    // ---------- Data management ----------
     function clearAllHistory() {
         if (confirm('Czy na pewno chcesz wyczyścić całą historię pracy i ustawienia? Ta operacja jest nieodwracalna!')) {
             localStorage.removeItem('work_data');
@@ -426,12 +580,74 @@
             localStorage.removeItem('work_profiles');
             localStorage.removeItem('work_settings');
             selectedDates = [];
+            editingProfileId = null;
             renderProfiles();
             renderCalendar();
-            alert('Wszystkie dane zostały wyczyszczone.');
+            showToast('Wszystkie dane zostały wyczyszczone.');
         }
     }
 
+    function exportData() {
+        var payload = {
+            work_data: getData(),
+            work_extras: getExtras(),
+            work_profiles: getProfiles(),
+            work_settings: getSettings(),
+            exportedAt: new Date().toISOString(),
+            version: 1
+        };
+        var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        var stamp = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = 'dziennik-pracy-backup-' + stamp + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Wyeksportowano kopię zapasową.');
+    }
+
+    function importData(event) {
+        var file = event.target.files && event.target.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                var parsed = JSON.parse(e.target.result);
+                if (typeof parsed !== 'object' || parsed === null) throw new Error('invalid');
+
+                var hasKnownKey = ('work_data' in parsed) || ('work_extras' in parsed) ||
+                                   ('work_profiles' in parsed) || ('work_settings' in parsed);
+                if (!hasKnownKey) throw new Error('invalid');
+
+                if (!confirm('Import nadpisze bieżące dane w tej przeglądarce. Kontynuować?')) return;
+
+                if (parsed.work_data) saveData(parsed.work_data);
+                if (parsed.work_extras) saveExtras(parsed.work_extras);
+                if (parsed.work_profiles) saveProfiles(parsed.work_profiles);
+                if (parsed.work_settings) saveSettings(parsed.work_settings);
+
+                selectedDates = [];
+                editingProfileId = null;
+                renderProfiles();
+                renderCalendar();
+                showToast('Dane zaimportowane pomyślnie.');
+            } catch (err) {
+                showToast('Nieprawidłowy plik kopii zapasowej.', true);
+            } finally {
+                event.target.value = '';
+            }
+        };
+        reader.onerror = function() {
+            showToast('Nie udało się odczytać pliku.', true);
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    // ---------- Calendar ----------
     function getCurrentMonthKey() {
         return currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
     }
@@ -440,7 +656,7 @@
         var grid = document.getElementById('calGrid');
         if (!grid) return;
         grid.innerHTML = '';
-        
+
         var year = currentDate.getFullYear();
         var month = currentDate.getMonth();
 
@@ -462,52 +678,46 @@
         var todayStr = todayObj.getFullYear() + '-' + String(todayObj.getMonth() + 1).padStart(2, '0') + '-' + String(todayObj.getDate()).padStart(2, '0');
 
         for (var day = 1; day <= daysInMonth; day++) {
-            (function(dNum) {
-                var dateObj = new Date(year, month, dNum);
-                var dayOfWeek = dateObj.getDay();
-                var dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(dNum).padStart(2, '0');
-                
-                var dayEl = document.createElement('div');
-                dayEl.className = 'cal-day';
-                if (dayOfWeek === 0 || dayOfWeek === 6) dayEl.className += ' weekend';
-                if (dateStr === todayStr) dayEl.className += ' today';
-                if (selectedDates.indexOf(dateStr) > -1) dayEl.className += ' selected';
+            var dateObj = new Date(year, month, day);
+            var dayOfWeek = dateObj.getDay();
+            var dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
 
-                var html = '<div class="day-num">' + dNum + '</div>';
+            var dayEl = document.createElement('div');
+            dayEl.className = 'cal-day';
+            if (dayOfWeek === 0 || dayOfWeek === 6) dayEl.className += ' weekend';
+            if (dateStr === todayStr) dayEl.className += ' today';
+            if (selectedDates.indexOf(dateStr) > -1) dayEl.className += ' selected';
 
-                if (data[dateStr]) {
-                    var entry = data[dateStr];
-                    var t = entry.type || 'work';
-                    var h = entry.hours || 0;
-                    var r = entry.rate || 0;
-                    var earn = 0;
+            var html = '<div class="day-num">' + day + '</div>';
 
-                    if (t === 'work' || t === 'urlop') earn = h * r;
-                    else if (t === 'l4') earn = (h * r) * 0.8;
-                    else if (t === 'bezplatny') earn = 0;
+            if (data[dateStr]) {
+                var entry = data[dateStr];
+                var t = entry.type || 'work';
+                var h = entry.hours || 0;
+                var earn = calculateEarn(entry);
 
-                    html += '<div class="day-info">';
-                    if (t === 'work') {
-                        html += '<span class="day-badge badge-shift">' + h + 'h</span>';
-                        html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
-                    } else if (t === 'urlop') {
-                        html += '<span class="day-badge badge-urlop">Urlop</span>';
-                        html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
-                    } else if (t === 'l4') {
-                        html += '<span class="day-badge badge-l4">L4 (80%)</span>';
-                        html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
-                    } else if (t === 'bezplatny') {
-                        html += '<span class="day-badge badge-bezpl">Bezpłatny</span>';
-                    }
-                    html += '</div>';
+                html += '<div class="day-info">';
+                if (t === 'work') {
+                    html += '<span class="day-badge badge-shift">' + h + 'h</span>';
+                    html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
+                } else if (t === 'urlop') {
+                    html += '<span class="day-badge badge-urlop">Urlop</span>';
+                    html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
+                } else if (t === 'l4') {
+                    html += '<span class="day-badge badge-l4">L4 (80%)</span>';
+                    html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
+                } else if (t === 'bezplatny') {
+                    html += '<span class="day-badge badge-bezpl">Bezpłatny</span>';
                 }
+                html += '</div>';
+            }
 
-                dayEl.innerHTML = html;
-                dayEl.onclick = function() { toggleDateSelection(dateStr); };
-                grid.appendChild(dayEl);
-            })(day);
+            dayEl.innerHTML = html;
+            dayEl.onclick = (function(ds) { return function() { toggleDateSelection(ds); }; })(dateStr);
+            grid.appendChild(dayEl);
         }
 
+        syncSelectAllButtonLabel();
         loadOptionsAndExtras();
         updateSummary();
     }
@@ -520,11 +730,10 @@
         renderCalendar();
     }
 
-    function toggleSelectAllWorkdays() {
+    function getWorkdaysOfCurrentMonth() {
         var year = currentDate.getFullYear();
         var month = currentDate.getMonth();
         var daysInMonth = new Date(year, month + 1, 0).getDate();
-
         var workdays = [];
         for (var day = 1; day <= daysInMonth; day++) {
             var dateObj = new Date(year, month, day);
@@ -533,25 +742,34 @@
                 workdays.push(year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0'));
             }
         }
+        return workdays;
+    }
 
-        var btn = document.getElementById('selectAllBtn');
-        var allSelected = true;
-        for (var i = 0; i < workdays.length; i++) {
-            if (selectedDates.indexOf(workdays[i]) === -1) { allSelected = false; break; }
-        }
+    function toggleSelectAllWorkdays() {
+        var workdays = getWorkdaysOfCurrentMonth();
+
+        var allSelected = workdays.length > 0 && workdays.every(function(d) { return selectedDates.indexOf(d) > -1; });
 
         if (allSelected) {
             selectedDates = selectedDates.filter(function(d) { return workdays.indexOf(d) === -1; });
-            if (btn) btn.innerText = "Zaznacz robocze (bez weekendów)";
         } else {
             for (var j = 0; j < workdays.length; j++) {
                 if (selectedDates.indexOf(workdays[j]) === -1) selectedDates.push(workdays[j]);
             }
-            if (btn) btn.innerText = "Odznacz wszystkie dni";
         }
 
         updateSelectedText();
         renderCalendar();
+    }
+
+    // Wylicza etykietę przycisku na podstawie aktualnego stanu zaznaczenia,
+    // zamiast trzymać osobny, mogący się rozjechać stan tekstowy.
+    function syncSelectAllButtonLabel() {
+        var btn = document.getElementById('selectAllBtn');
+        if (!btn) return;
+        var workdays = getWorkdaysOfCurrentMonth();
+        var allSelected = workdays.length > 0 && workdays.every(function(d) { return selectedDates.indexOf(d) > -1; });
+        btn.innerText = allSelected ? "Odznacz wszystkie dni" : "Zaznacz robocze (bez weekendów)";
     }
 
     function updateSelectedText() {
@@ -562,8 +780,7 @@
     function changeMonth(delta) {
         currentDate.setMonth(currentDate.getMonth() + delta);
         selectedDates = [];
-        var btn = document.getElementById('selectAllBtn');
-        if (btn) btn.innerText = "Zaznacz robocze (bez weekendów)";
+        updateSelectedText();
         renderCalendar();
     }
 
@@ -571,15 +788,14 @@
         var content = document.getElementById(contentId);
         var btn = document.getElementById(btnId);
         var card = document.getElementById(cardId);
-        
+
         if (content.classList.contains('open')) {
             content.classList.remove('open');
             btn.innerText = '▼ Rozwiń';
         } else {
             content.classList.add('open');
             btn.innerText = '▲ Zwiń';
-            
-            // Poprawione przewijanie: natychmiastowe wyrównanie do samej góry karty
+
             setTimeout(function() {
                 card.scrollIntoView({ behavior: 'auto', block: 'start' });
             }, 50);
@@ -596,24 +812,69 @@
         }
     }
 
+    // ---------- Profiles ----------
     function saveProfile() {
-        var name = document.getElementById('profName').value;
+        var name = document.getElementById('profName').value.trim();
         var hours = parseFloat(document.getElementById('profHours').value) || 0;
         var rate = parseFloat(document.getElementById('profRate').value) || 0;
-        if (!name) return alert('Wpisz nazwę profilu');
+
+        if (!name) return showToast('Wpisz nazwę profilu', true);
+        if (hours <= 0) return showToast('Podaj liczbę godzin większą od 0', true);
+        if (rate <= 0) return showToast('Podaj stawkę większą od 0', true);
+
         var profiles = getProfiles();
-        profiles.push({ id: Date.now(), name: name, hours: hours, rate: rate });
+
+        if (editingProfileId !== null) {
+            for (var i = 0; i < profiles.length; i++) {
+                if (profiles[i].id === editingProfileId) {
+                    profiles[i].name = name;
+                    profiles[i].hours = hours;
+                    profiles[i].rate = rate;
+                    break;
+                }
+            }
+            editingProfileId = null;
+            document.getElementById('profSaveBtn').innerText = 'Dodaj profil';
+        } else {
+            profiles.push({ id: Date.now(), name: name, hours: hours, rate: rate });
+        }
+
         saveProfiles(profiles);
         document.getElementById('profName').value = '';
         document.getElementById('profHours').value = '';
         document.getElementById('profRate').value = '';
         renderProfiles();
+        showToast('Profil zapisany.');
+    }
+
+    function startEditProfile(id) {
+        var profiles = getProfiles();
+        for (var i = 0; i < profiles.length; i++) {
+            if (profiles[i].id === id) {
+                document.getElementById('profName').value = profiles[i].name;
+                document.getElementById('profHours').value = profiles[i].hours;
+                document.getElementById('profRate').value = profiles[i].rate;
+                editingProfileId = id;
+                document.getElementById('profSaveBtn').innerText = 'Zapisz zmiany';
+                document.getElementById('profName').focus();
+                break;
+            }
+        }
+    }
+
+    function cancelEditProfile() {
+        editingProfileId = null;
+        document.getElementById('profName').value = '';
+        document.getElementById('profHours').value = '';
+        document.getElementById('profRate').value = '';
+        document.getElementById('profSaveBtn').innerText = 'Dodaj profil';
     }
 
     function deleteProfile(id) {
         var profiles = getProfiles();
         profiles = profiles.filter(function(p) { return p.id !== id; });
         saveProfiles(profiles);
+        if (editingProfileId === id) cancelEditProfile();
         renderProfiles();
     }
 
@@ -622,22 +883,29 @@
         var select = document.getElementById('profileSelect');
         var list = document.getElementById('profilesList');
         select.innerHTML = '<option value="">-- Wybierz profil --</option>';
-        
+
         if (profiles.length === 0) {
             list.innerHTML = 'Brak zapisanych profili.';
+            refreshSuggestions();
             return;
         }
 
-        var html = '<b>Zapisane profile:</b><br>';
+        var selectHtml = '<option value="">-- Wybierz profil --</option>';
+        var listHtml = '<b>Zapisane profile:</b>';
         for (var i = 0; i < profiles.length; i++) {
             var p = profiles[i];
-            select.innerHTML += '<option value="' + p.id + '">' + p.name + ' (' + p.hours + 'h / ' + p.rate + 'zł)</option>';
-            html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px; background:#0f172a; padding:4px 6px; border-radius:4px;">';
-            html += '<span>• <b>' + p.name + '</b>: ' + p.hours + 'h @ ' + p.rate + ' zł/h</span>';
-            html += '<button onclick="deleteProfile(' + p.id + ')" style="background:#ef4444; color:white; border:none; border-radius:3px; padding:2px 6px; font-size:0.65rem; cursor:pointer;">Usuń</button>';
-            html += '</div>';
+            var safeName = escapeHtml(p.name);
+            selectHtml += '<option value="' + p.id + '">' + safeName + ' (' + p.hours + 'h / ' + p.rate + 'zł)</option>';
+            listHtml += '<div class="profile-row">';
+            listHtml += '<span>• <b>' + safeName + '</b>: ' + p.hours + 'h @ ' + p.rate + ' zł/h</span>';
+            listHtml += '<span class="profile-actions">';
+            listHtml += '<button class="btn-edit" onclick="startEditProfile(' + p.id + ')">Edytuj</button>';
+            listHtml += '<button class="btn-del" onclick="deleteProfile(' + p.id + ')">Usuń</button>';
+            listHtml += '</span></div>';
         }
-        list.innerHTML = html;
+        select.innerHTML = selectHtml;
+        list.innerHTML = listHtml;
+        refreshSuggestions();
     }
 
     function applyProfile() {
@@ -653,28 +921,41 @@
         }
     }
 
+    // ---------- Day entries ----------
     function saveSelectedDays() {
-        if (selectedDates.length === 0) return alert('Zaznacz dni na kalendarzu!');
+        if (selectedDates.length === 0) return showToast('Zaznacz dni na kalendarzu!', true);
         var type = document.getElementById('dayTypeSelect').value;
         var hours = type === 'bezplatny' ? 0 : (parseFloat(document.getElementById('inputHours').value) || 0);
-        var rate = parseFloat(document.getElementById('inputRate').value) || 0;
-        
+        var rate = type === 'bezplatny' ? 0 : (parseFloat(document.getElementById('inputRate').value) || 0);
+
+        if (type !== 'bezplatny' && hours <= 0) {
+            return showToast('Podaj liczbę godzin większą od 0 (lub wybierz "Urlop bezpłatny").', true);
+        }
+        if (type !== 'bezplatny' && rate <= 0) {
+            return showToast('Podaj stawkę godzinową większą od 0.', true);
+        }
+
         var data = getData();
-        for (var i = 0; i < selectedDates.length; i++) { 
-            data[selectedDates[i]] = { type: type, hours: hours, rate: rate }; 
+        for (var i = 0; i < selectedDates.length; i++) {
+            data[selectedDates[i]] = { type: type, hours: hours, rate: rate };
         }
         saveData(data);
+        if (type !== 'bezplatny') saveLastUsed(hours, rate);
         renderCalendar();
+        refreshSuggestions();
+        showToast('Zapisano ' + selectedDates.length + ' dni.');
     }
 
     function deleteSelectedDays() {
-        if (selectedDates.length === 0) return alert('Zaznacz dni do usunięcia');
+        if (selectedDates.length === 0) return showToast('Zaznacz dni do usunięcia', true);
         var data = getData();
         for (var i = 0; i < selectedDates.length; i++) { delete data[selectedDates[i]]; }
         saveData(data);
         renderCalendar();
+        showToast('Usunięto wpisy dla zaznaczonych dni.');
     }
 
+    // ---------- Options / extras ----------
     function loadOptionsAndExtras() {
         var settings = getSettings();
         var extras = getExtras();
@@ -688,10 +969,12 @@
         document.getElementById('enableNettoCheck').checked = settings.enableNetto || false;
         document.getElementById('contractTypeSelect').value = settings.contractType || 'uop';
         document.getElementById('taxRateInput').value = settings.taxRate || 25;
+        document.getElementById('youngReliefCheck').checked = settings.youngRelief || false;
+        document.getElementById('advancedModeCheck').checked = settings.advancedMode || false;
 
         var detailsDisplay = settings.enableNetto ? 'block' : 'none';
         document.getElementById('taxDetailsGroup').style.display = detailsDisplay;
-        document.getElementById('customTaxGroup').style.display = (settings.enableNetto && settings.contractType === 'custom') ? 'block' : 'none';
+        updateTaxSubOptionsVisibility(settings);
 
         document.getElementById('manualComm').value = m.comm || '';
         document.getElementById('manualFuel').value = m.fuel || '';
@@ -703,28 +986,43 @@
         }
     }
 
+    // Pokazuje odpowiednie pod-opcje (ulga dla młodych / II próg) w zależności
+    // od wybranego rodzaju umowy — dla studenta i "własnego %" nie mają sensu.
+    function updateTaxSubOptionsVisibility(settings) {
+        var contractType = settings.contractType;
+        var enableNetto = settings.enableNetto;
+        document.getElementById('customTaxGroup').style.display = (enableNetto && contractType === 'custom') ? 'block' : 'none';
+        document.getElementById('youngReliefGroup').style.display = (enableNetto && (contractType === 'uop' || contractType === 'uz_normal')) ? 'block' : 'none';
+        document.getElementById('advancedModeGroup').style.display = (enableNetto && contractType === 'uop' && !settings.youngRelief) ? 'block' : 'none';
+    }
+
     function saveOptions() {
         var isFixed = document.getElementById('fixedDodatekCheck').checked;
         var fixedVal = parseFloat(document.getElementById('fixedDodatekValInput').value) || 0;
         var enableNetto = document.getElementById('enableNettoCheck').checked;
         var contractType = document.getElementById('contractTypeSelect').value;
         var taxRate = parseFloat(document.getElementById('taxRateInput').value) || 0;
+        var youngRelief = document.getElementById('youngReliefCheck').checked;
+        var advancedMode = document.getElementById('advancedModeCheck').checked;
 
         document.getElementById('fixedDodatekValGroup').style.display = isFixed ? 'block' : 'none';
         document.getElementById('taxDetailsGroup').style.display = enableNetto ? 'block' : 'none';
-        document.getElementById('customTaxGroup').style.display = (enableNetto && contractType === 'custom') ? 'block' : 'none';
 
         var settings = {
             isFixedDodatek: isFixed,
             fixedDodatekVal: fixedVal,
             enableNetto: enableNetto,
             contractType: contractType,
-            taxRate: taxRate
+            taxRate: taxRate,
+            youngRelief: youngRelief,
+            advancedMode: advancedMode
         };
+        updateTaxSubOptionsVisibility(settings);
         saveSettings(settings);
 
         if (isFixed) {
             document.getElementById('manualBonus').value = fixedVal;
+            saveAndRecalculateExtras();
         }
 
         updateSummary();
@@ -733,9 +1031,9 @@
     function saveAndRecalculateExtras() {
         var extras = getExtras();
         var monthKey = getCurrentMonthKey();
-        
+
         if (!extras[monthKey]) extras[monthKey] = {};
-        
+
         extras[monthKey].comm = parseFloat(document.getElementById('manualComm').value) || 0;
         extras[monthKey].bonus = parseFloat(document.getElementById('manualBonus').value) || 0;
         extras[monthKey].fuel = parseFloat(document.getElementById('manualFuel').value) || 0;
@@ -744,35 +1042,94 @@
         updateSummary();
     }
 
-    function calculateNetto(gross, contractType, customRate) {
+    // ---------- Netto calculation ----------
+    var PIT_THRESHOLD_ANNUAL = 120000; // roczny próg II stawki PIT (32%)
+    var MONTHLY_TAX_RELIEF = 300; // miesięczna kwota zmniejszająca podatek
+
+    // Podstawa opodatkowania dla danego miesiąca przy umowie o pracę (uproszczona:
+    // gross - składki społeczne (13.71%) - 250 zł kosztów uzyskania przychodu).
+    function computeUoPMonthlyBase(monthGross) {
+        var zusSpoleczne = monthGross * 0.1371;
+        var podstawaZdrowotna = monthGross - zusSpoleczne;
+        var podstawaOpodatkowania = podstawaZdrowotna - 250;
+        if (podstawaOpodatkowania < 0) podstawaOpodatkowania = 0;
+        return { zusSpoleczne: zusSpoleczne, podstawaZdrowotna: podstawaZdrowotna, podstawaOpodatkowania: podstawaOpodatkowania };
+    }
+
+    // Sumuje faktyczny brutto danego miesiąca bezpośrednio z zapisanych danych
+    // (a nie z pól formularza), żeby dało się to liczyć dla dowolnego miesiąca roku.
+    function getMonthGrossFromStorage(monthKey) {
+        var data = getData();
+        var extras = getExtras();
+        var base = 0;
+        for (var d in data) {
+            if (d.indexOf(monthKey) === 0) base += calculateEarn(data[d]);
+        }
+        var m = extras[monthKey] || {};
+        return base + (m.comm || 0) + (m.bonus || 0) + (m.fuel || 0);
+    }
+
+    // Suma "podstawy opodatkowania" za miesiące poprzedzające dany miesiąc,
+    // w tym samym roku kalendarzowym — potrzebna do ustalenia, czy i o ile
+    // przekroczony jest roczny próg 120 000 zł.
+    function getAnnualPodstawaBefore(year, monthIndex) {
+        var sum = 0;
+        for (var mi = 0; mi < monthIndex; mi++) {
+            var mk = year + '-' + String(mi + 1).padStart(2, '0');
+            var g = getMonthGrossFromStorage(mk);
+            if (g > 0) sum += computeUoPMonthlyBase(g).podstawaOpodatkowania;
+        }
+        return sum;
+    }
+
+    // settings: { contractType, taxRate, youngRelief, advancedMode }
+    // monthKey: "YYYY-MM" bieżąco wyświetlanego miesiąca (do liczenia progresji)
+    function calculateNetto(gross, settings, monthKey) {
+        var contractType = settings.contractType;
+        var youngRelief = !!settings.youngRelief;
+
         if (contractType === 'uz_student') return gross;
-        
+
         if (contractType === 'uop') {
-            var zusSpoleczne = gross * 0.1371;
-            var podstawaZdrowotna = gross - zusSpoleczne;
-            var skladkaZdrowotna = podstawaZdrowotna * 0.09;
-            var podstawaOpodatkowania = podstawaZdrowotna - 250;
-            if (podstawaOpodatkowania < 0) podstawaOpodatkowania = 0;
-            
-            var zaliczkaPit = (podstawaOpodatkowania * 0.12) - 300;
-            if (zaliczkaPit < 0) zaliczkaPit = 0;
-            
-            var netto = gross - zusSpoleczne - skladkaZdrowotna - zaliczkaPit;
+            var m = computeUoPMonthlyBase(gross);
+            var zaliczkaPit;
+
+            if (youngRelief) {
+                // Ulga dla młodych: 0% PIT (nadal płacone ZUS + zdrowotne)
+                zaliczkaPit = 0;
+            } else if (settings.advancedMode) {
+                var year = parseInt(monthKey.split('-')[0], 10);
+                var monthIndex = parseInt(monthKey.split('-')[1], 10) - 1;
+                var annualBefore = getAnnualPodstawaBefore(year, monthIndex);
+                var remainingLower = Math.max(0, PIT_THRESHOLD_ANNUAL - annualBefore);
+                var lowerPart = Math.min(m.podstawaOpodatkowania, remainingLower);
+                var higherPart = m.podstawaOpodatkowania - lowerPart;
+                zaliczkaPit = (lowerPart * 0.12) + (higherPart * 0.32) - MONTHLY_TAX_RELIEF;
+                if (zaliczkaPit < 0) zaliczkaPit = 0;
+            } else {
+                zaliczkaPit = (m.podstawaOpodatkowania * 0.12) - MONTHLY_TAX_RELIEF;
+                if (zaliczkaPit < 0) zaliczkaPit = 0;
+            }
+
+            var netto = gross - m.zusSpoleczne - (m.podstawaZdrowotna * 0.09) - zaliczkaPit;
             return netto > 0 ? netto : 0;
         }
-        
+
         if (contractType === 'uz_normal') {
-            return gross * 0.78;
+            // Bardzo zgrubny szacunek: bez ulgi ~78% na rękę, z ulgą dla młodych
+            // odpada tylko część podatkowa (nadal płacisz ZUS/zdrowotne), stąd wyższy %.
+            return gross * (youngRelief ? 0.855 : 0.78);
         }
-        
+
         if (contractType === 'custom') {
-            var effectiveTaxRate = (customRate || 0) / 100;
+            var effectiveTaxRate = (settings.taxRate || 0) / 100;
             return gross * (1 - effectiveTaxRate);
         }
 
         return gross;
     }
 
+    // ---------- Summary ----------
     function updateSummary() {
         var data = getData();
         var monthKey = getCurrentMonthKey();
@@ -780,23 +1137,8 @@
 
         for (var d in data) {
             if (d.indexOf(monthKey) === 0) {
-                var item = data[d];
-                var t = item.type || 'work';
-                var h = item.hours || 0;
-                var r = item.rate || 0;
-
-                if (t === 'work') {
-                    hours += h;
-                    base += h * r;
-                } else if (t === 'urlop') {
-                    hours += h;
-                    base += h * r;
-                } else if (t === 'l4') {
-                    hours += h;
-                    base += (h * r) * 0.8;
-                } else if (t === 'bezplatny') {
-                    // 0 godzin i 0 zł
-                }
+                hours += data[d].hours || 0;
+                base += calculateEarn(data[d]);
             }
         }
 
@@ -807,16 +1149,25 @@
         var totalGross = base + comm + bonus + fuel;
 
         document.getElementById('sumHours').innerText = hours + ' h';
-        document.getElementById('sumBase').innerText = Math.round(base) + ' zł';
-        document.getElementById('sumTotal').innerText = Math.round(totalGross) + ' zł';
+        document.getElementById('sumBase').innerText = formatMoney(base);
+        document.getElementById('sumTotal').innerText = formatMoney(totalGross);
 
         var settings = getSettings();
         var nettoHint = document.getElementById('nettoHint');
 
         if (settings.enableNetto) {
             nettoHint.style.display = 'block';
-            var netVal = calculateNetto(totalGross, settings.contractType, settings.taxRate);
-            document.getElementById('nettoTotalVal').innerText = Math.round(netVal) + ' zł';
+            var netVal = calculateNetto(totalGross, settings, monthKey);
+            document.getElementById('nettoTotalVal').innerText = formatMoney(netVal);
+
+            var disclaimer = document.getElementById('nettoDisclaimer');
+            if (settings.contractType === 'uop' && settings.youngRelief) {
+                disclaimer.innerText = 'Ulga dla młodych: PIT = 0%, nadal naliczane ZUS i zdrowotne. Nie uwzględnia rocznego limitu ulgi (ok. 85 528 zł) ani PPK.';
+            } else if (settings.contractType === 'uop' && settings.advancedMode) {
+                disclaimer.innerText = 'Tryb zaawansowany: II próg (32%) liczony narastająco od stycznia na podstawie danych z tej appki. Nie uwzględnia PPK ani rocznego rozliczenia kwoty wolnej.';
+            } else {
+                disclaimer.innerText = 'Wyliczenie orientacyjne — uproszczony szacunek, nie traktuj jako oficjalnej listy płac.';
+            }
         } else {
             nettoHint.style.display = 'none';
         }
@@ -825,7 +1176,9 @@
     // Inicjalizacja przy starcie
     window.onload = function() {
         renderProfiles();
+        updateSelectedText();
         renderCalendar();
+        prefillLastUsed();
     };
 </script>
 </body>
