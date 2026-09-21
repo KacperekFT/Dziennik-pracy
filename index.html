@@ -27,8 +27,8 @@
             background-color: var(--bg);
             color: var(--text-main);
             margin: 0;
-            /* Zwiększony margines górny, żeby napisy w lewym górnym rogu nie były ucinane przez ekran telefonu */
-            padding: 20px 8px 8px 8px;
+            /* Bezpieczny margines górny, żeby napisy nie były ucinane */
+            padding: 24px 8px 8px 8px;
             -webkit-tap-highlight-color: transparent;
         }
 
@@ -76,7 +76,7 @@
             color: var(--primary);
             cursor: pointer;
             font-size: 0.8rem;
-            padding: 0;
+            padding: 4px;
         }
 
         .cal-header {
@@ -571,16 +571,18 @@
         var content = document.getElementById(contentId);
         var btn = document.getElementById(btnId);
         var card = document.getElementById(cardId);
+        
         if (content.classList.contains('open')) {
             content.classList.remove('open');
             btn.innerText = '▼ Rozwiń';
         } else {
             content.classList.add('open');
             btn.innerText = '▲ Zwiń';
-            // Płynne przewinięcie ekranu dokładnie do górnej krawędzi tej karty
+            
+            // Poprawione przewijanie: natychmiastowe wyrównanie do samej góry karty
             setTimeout(function() {
-                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
+                card.scrollIntoView({ behavior: 'auto', block: 'start' });
+            }, 50);
         }
     }
 
