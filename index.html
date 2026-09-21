@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dziennik Pracy i Zarobków</title>
+    <title>Dziennik Pracy</title>
     <style>
         :root {
             --bg: #0f172a;
@@ -15,7 +15,6 @@
             --accent-green: #10b981;
             --accent-amber: #f59e0b;
             --accent-purple: #8b5cf6;
-            --accent-red: #ef4444;
             --selected-day: rgba(59, 130, 246, 0.45);
         }
 
@@ -91,7 +90,6 @@
             padding: 6px 10px;
             border-radius: 6px;
             font-size: 0.8rem;
-            cursor: pointer;
         }
 
         .cal-grid {
@@ -154,6 +152,16 @@
             font-size: 0.85rem;
         }
 
+        .checkbox-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--primary);
+            font-weight: bold;
+            margin-left: 8px;
+            cursor: pointer;
+        }
+
         .row { display: flex; gap: 6px; }
         .row > div { flex: 1; }
 
@@ -208,30 +216,16 @@
 
         .collapsible-content { display: none; margin-top: 6px; }
         .collapsible-content.open { display: block; }
-
-        /* Status verify styles */
-        .verify-box {
-            margin-top: 8px;
-            padding: 8px;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            text-align: center;
-        }
-        .verify-ok { background: rgba(16, 185, 129, 0.2); border: 1px solid var(--accent-green); color: var(--accent-green); }
-        .verify-missing { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--accent-red); color: var(--accent-red); }
-        .verify-extra { background: rgba(59, 130, 246, 0.2); border: 1px solid var(--primary); color: #93c5fd; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h1>Dziennik Pracy i Zarobków</h1>
+    <h1>Dziennik Pracy</h1>
 </div>
 
 <div class="layout">
     <div>
-        <!-- CALENDAR CARD -->
         <div class="card">
             <div class="cal-header">
                 <button onclick="changeMonth(-1)">‹ Poprzedni</button>
@@ -253,7 +247,6 @@
             <div class="cal-grid" id="calGrid"></div>
         </div>
 
-        <!-- FORM CARD FOR SELECTED DAYS -->
         <div class="card" style="margin-top: 8px;">
             <h2>Zaznaczone dni</h2>
             <div class="selected-info" id="selectedDaysText">Kliknij dni na kalendarzu</div>
@@ -284,7 +277,6 @@
     </div>
 
     <div>
-        <!-- MONTH SUMMARY CARD -->
         <div class="card">
             <h2>Podsumowanie Miesiąca</h2>
             <div class="sum-item">
@@ -305,7 +297,9 @@
                         <input type="number" id="manualComm" placeholder="0" oninput="updateSummary()">
                     </div>
                     <div class="form-group">
-                        <label>Dodatek (zł)</label>
+                        <label style="display: flex; align-items: center;">Dodatek (zł) 
+                            <label class="checkbox-label"><input type="checkbox" id="fixedDodatekCheck" onchange="updateSummary()" style="width: auto; margin:0;"> stały</label>
+                        </label>
                         <input type="number" id="manualBonus" placeholder="0" oninput="updateSummary()">
                     </div>
                 </div>
@@ -321,30 +315,31 @@
             </div>
         </div>
 
-        <!-- VERIFICATION COLLAPSIBLE CARD -->
         <div class="card" style="margin-top: 8px;">
             <h2>
                 <span>Weryfikacja Wypłaty</span>
-                <button class="toggle-btn" id="toggleVerifyBtn" onclick="toggleVerifySection()">▼ Rozwiń</button>
+                <button class="toggle-btn" id="toggleWeryfikacjaBtn" onclick="toggleSection('weryfikacjaContent', 'toggleWeryfikacjaBtn')">▼ Rozwiń</button>
             </h2>
-            <div class="collapsible-content" id="verifyContent">
+            <div class="collapsible-content" id="weryfikacjaContent">
                 <div class="sum-item">
-                    <span>Należy się (RAZEM):</span>
-                    <span class="sum-val" id="verifyExpected">0.00 zł</span>
+                    <span>Oczekiwane RAZEM:</span>
+                    <span class="sum-val" id="expectedTotal">0 zł</span>
                 </div>
                 <div class="form-group" style="margin-top: 8px;">
-                    <label>Otrzymana kwota (zł):</label>
-                    <input type="number" step="0.01" id="receivedAmount" placeholder="Wpisz przelew/gotówkę" oninput="verifySalary()">
+                    <label>Faktycznie otrzymano (zł)</label>
+                    <input type="number" id="actualReceived" placeholder="Wpisz ile dostałeś" oninput="updateSummary()">
                 </div>
-                <div id="verifyResult" class="verify-box verify-ok" style="display:none;"></div>
+                <div class="sum-item sum-total" id="verificationResult" style="display:none; margin-top: 8px; font-size: 0.9rem;">
+                    <span id="verifLabel">Wynik:</span>
+                    <span class="sum-val" id="verifValue">0 zł</span>
+                </div>
             </div>
         </div>
 
-        <!-- SHIFT PROFILES COLLAPSIBLE CARD -->
         <div class="card" style="margin-top: 8px;">
             <h2>
                 <span>Profile Zmian</span>
-                <button class="toggle-btn" id="toggleProfilesBtn" onclick="toggleProfilesSection()">▼ Rozwiń</button>
+                <button class="toggle-btn" id="toggleProfilesBtn" onclick="toggleSection('profilesContent', 'toggleProfilesBtn')">▼ Rozwiń</button>
             </h2>
             <div class="collapsible-content" id="profilesContent">
                 <div class="form-group">
@@ -372,27 +367,22 @@
     var currentDate = new Date();
     var selectedDates = [];
 
-    // Local Storage Helper Functions
-    function getData() { 
-        try { return JSON.parse(localStorage.getItem('work_data_v5') || '{}'); } catch(e) { return {}; } 
-    }
+    function getData() { try { return JSON.parse(localStorage.getItem('work_data_v5') || '{}'); } catch(e) { return {}; } }
     function saveData(data) { localStorage.setItem('work_data_v5', JSON.stringify(data)); }
     
-    function getExtras() { 
-        try { return JSON.parse(localStorage.getItem('work_extras_v5') || '{}'); } catch(e) { return {}; } 
-    }
+    function getExtras() { try { return JSON.parse(localStorage.getItem('work_extras_v5') || '{}'); } catch(e) { return {}; } }
     function saveExtras(extras) { localStorage.setItem('work_extras_v5', JSON.stringify(extras)); }
 
-    function getProfiles() { 
-        try { return JSON.parse(localStorage.getItem('work_profiles_v5') || '[]'); } catch(e) { return []; } 
-    }
+    function getProfiles() { try { return JSON.parse(localStorage.getItem('work_profiles_v5') || '[]'); } catch(e) { return []; } }
     function saveProfiles(p) { localStorage.setItem('work_profiles_v5', JSON.stringify(p)); }
+
+    function getSettings() { try { return JSON.parse(localStorage.getItem('work_settings_v5') || '{}'); } catch(e) { return {}; } }
+    function saveSettings(s) { localStorage.setItem('work_settings_v5', JSON.stringify(s)); }
 
     function getCurrentMonthKey() {
         return currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
     }
 
-    // Calendar logic
     function renderCalendar() {
         var grid = document.getElementById('calGrid');
         if (!grid) return;
@@ -422,9 +412,7 @@
             (function(dNum) {
                 var dateObj = new Date(year, month, dNum);
                 var dayOfWeek = dateObj.getDay();
-                var dStr = String(dNum).padStart(2, '0');
-                var mStr = String(month + 1).padStart(2, '0');
-                var dateStr = year + '-' + mStr + '-' + dStr;
+                var dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(dNum).padStart(2, '0');
                 
                 var dayEl = document.createElement('div');
                 dayEl.className = 'cal-day';
@@ -456,11 +444,8 @@
 
     function toggleDateSelection(dateStr) {
         var index = selectedDates.indexOf(dateStr);
-        if (index > -1) {
-            selectedDates.splice(index, 1);
-        } else {
-            selectedDates.push(dateStr);
-        }
+        if (index > -1) selectedDates.splice(index, 1);
+        else selectedDates.push(dateStr);
         updateSelectedText();
         renderCalendar();
     }
@@ -475,19 +460,14 @@
             var dateObj = new Date(year, month, day);
             var dayOfWeek = dateObj.getDay();
             if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-                var dStr = String(day).padStart(2, '0');
-                var mStr = String(month + 1).padStart(2, '0');
-                workdays.push(year + '-' + mStr + '-' + dStr);
+                workdays.push(year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0'));
             }
         }
 
         var btn = document.getElementById('selectAllBtn');
         var allSelected = true;
         for (var i = 0; i < workdays.length; i++) {
-            if (selectedDates.indexOf(workdays[i]) === -1) {
-                allSelected = false;
-                break;
-            }
+            if (selectedDates.indexOf(workdays[i]) === -1) { allSelected = false; break; }
         }
 
         if (allSelected) {
@@ -506,9 +486,7 @@
 
     function updateSelectedText() {
         var txt = document.getElementById('selectedDaysText');
-        if (txt) {
-            txt.innerText = selectedDates.length > 0 ? 'Liczba zaznaczonych dni: ' + selectedDates.length : 'Kliknij dni na kalendarzu';
-        }
+        if (txt) txt.innerText = selectedDates.length > 0 ? 'Liczba zaznaczonych dni: ' + selectedDates.length : 'Kliknij dni na kalendarzu';
     }
 
     function changeMonth(delta) {
@@ -519,11 +497,9 @@
         renderCalendar();
     }
 
-    // Toggle collapsible sections
-    function toggleProfilesSection() {
-        var content = document.getElementById('profilesContent');
-        var btn = document.getElementById('toggleProfilesBtn');
-        
+    function toggleSection(contentId, btnId) {
+        var content = document.getElementById(contentId);
+        var btn = document.getElementById(btnId);
         if (content.classList.contains('open')) {
             content.classList.remove('open');
             btn.innerText = '▼ Rozwiń';
@@ -533,31 +509,14 @@
         }
     }
 
-    function toggleVerifySection() {
-        var content = document.getElementById('verifyContent');
-        var btn = document.getElementById('toggleVerifyBtn');
-        
-        if (content.classList.contains('open')) {
-            content.classList.remove('open');
-            btn.innerText = '▼ Rozwiń';
-        } else {
-            content.classList.add('open');
-            btn.innerText = '▲ Zwiń';
-        }
-    }
-
-    // Profile Management
     function saveProfile() {
         var name = document.getElementById('profName').value;
         var hours = parseFloat(document.getElementById('profHours').value) || 0;
         var rate = parseFloat(document.getElementById('profRate').value) || 0;
-
         if (!name) return alert('Wpisz nazwę profilu');
-
         var profiles = getProfiles();
         profiles.push({ id: Date.now(), name: name, hours: hours, rate: rate });
         saveProfiles(profiles);
-
         document.getElementById('profName').value = '';
         renderProfiles();
     }
@@ -566,10 +525,8 @@
         var profiles = getProfiles();
         var select = document.getElementById('profileSelect');
         var list = document.getElementById('profilesList');
-
         select.innerHTML = '<option value="">-- Wybierz profil --</option>';
         list.innerHTML = '<b>Zapisane profile:</b><br>';
-
         for (var i = 0; i < profiles.length; i++) {
             var p = profiles[i];
             select.innerHTML += '<option value="' + p.id + '">' + p.name + ' (' + p.hours + 'h / ' + p.rate + 'zł)</option>';
@@ -580,7 +537,6 @@
     function applyProfile() {
         var profId = document.getElementById('profileSelect').value;
         if (!profId) return;
-
         var profiles = getProfiles();
         for (var i = 0; i < profiles.length; i++) {
             if (profiles[i].id == profId) {
@@ -593,46 +549,45 @@
 
     function saveSelectedDays() {
         if (selectedDates.length === 0) return alert('Zaznacz dni na kalendarzu!');
-
         var hours = parseFloat(document.getElementById('inputHours').value) || 0;
         var rate = parseFloat(document.getElementById('inputRate').value) || 0;
-
         var data = getData();
-        for (var i = 0; i < selectedDates.length; i++) {
-            data[selectedDates[i]] = { hours: hours, rate: rate };
-        }
-
+        for (var i = 0; i < selectedDates.length; i++) { data[selectedDates[i]] = { hours: hours, rate: rate }; }
         saveData(data);
         renderCalendar();
     }
 
     function deleteSelectedDays() {
         if (selectedDates.length === 0) return alert('Zaznacz dni do usunięcia');
-
         var data = getData();
-        for (var i = 0; i < selectedDates.length; i++) {
-            delete data[selectedDates[i]];
-        }
+        for (var i = 0; i < selectedDates.length; i++) { delete data[selectedDates[i]]; }
         saveData(data);
         renderCalendar();
     }
 
     function loadMonthExtras() {
         var extras = getExtras();
+        var settings = getSettings();
         var monthKey = getCurrentMonthKey();
         var m = extras[monthKey] || {};
 
         document.getElementById('manualComm').value = m.comm || '';
-        document.getElementById('manualBonus').value = m.bonus || '';
         document.getElementById('manualFuel').value = m.fuel || '';
-        document.getElementById('receivedAmount').value = m.received || '';
+        document.getElementById('actualReceived').value = m.received || '';
+
+        var isFixed = settings.isFixedDodatek || false;
+        document.getElementById('fixedDodatekCheck').checked = isFixed;
+
+        if (isFixed) {
+            document.getElementById('manualBonus').value = settings.fixedDodatekValue || '';
+        } else {
+            document.getElementById('manualBonus').value = m.bonus || '';
+        }
     }
 
-    // Calculations & Salary Verification
     function updateSummary() {
         var data = getData();
         var monthKey = getCurrentMonthKey();
-
         var hours = 0, base = 0;
 
         for (var d in data) {
@@ -644,9 +599,17 @@
         }
 
         var comm = parseFloat(document.getElementById('manualComm').value) || 0;
-        var bonus = parseFloat(document.getElementById('manualBonus').value) || 0;
         var fuel = parseFloat(document.getElementById('manualFuel').value) || 0;
-        var received = parseFloat(document.getElementById('receivedAmount').value) || '';
+        
+        var isFixed = document.getElementById('fixedDodatekCheck').checked;
+        var bonus = parseFloat(document.getElementById('manualBonus').value) || 0;
+
+        var settings = getSettings();
+        settings.isFixedDodatek = isFixed;
+        if (isFixed) settings.fixedDodatekValue = bonus;
+        saveSettings(settings);
+
+        var received = parseFloat(document.getElementById('actualReceived').value) || 0;
 
         var extras = getExtras();
         extras[monthKey] = { comm: comm, bonus: bonus, fuel: fuel, received: received };
@@ -657,42 +620,43 @@
         
         var total = base + comm + bonus + fuel;
         document.getElementById('sumTotal').innerText = total.toFixed(2) + ' zł';
-        document.getElementById('verifyExpected').innerText = total.toFixed(2) + ' zł';
+        document.getElementById('expectedTotal').innerText = total.toFixed(2) + ' zł';
 
-        verifySalary();
+        updateVerificationResult(total, received);
     }
 
-    function verifySalary() {
-        var expected = parseFloat(document.getElementById('sumTotal').innerText) || 0;
-        var receivedVal = document.getElementById('receivedAmount').value;
-        var resBox = document.getElementById('verifyResult');
+    function updateVerificationResult(total, received) {
+        var resBox = document.getElementById('verificationResult');
+        var verifLabel = document.getElementById('verifLabel');
+        var verifValue = document.getElementById('verifValue');
+        var rawReceived = document.getElementById('actualReceived').value;
 
-        // Update local storage state
-        var monthKey = getCurrentMonthKey();
-        var extras = getExtras();
-        if (!extras[monthKey]) extras[monthKey] = {};
-        extras[monthKey].received = receivedVal;
-        saveExtras(extras);
-
-        if (receivedVal === '' || receivedVal === null) {
+        if (rawReceived === '') {
             resBox.style.display = 'none';
             return;
         }
 
-        var received = parseFloat(receivedVal) || 0;
-        var diff = received - expected;
+        resBox.style.display = 'flex';
+        var diff = received - total;
 
-        resBox.style.display = 'block';
-
-        if (Math.abs(diff) < 0.01) {
-            resBox.className = 'verify-box verify-ok';
-            resBox.innerText = 'Wypłata się zgadza! (0.00 zł)';
-        } else if (diff < 0) {
-            resBox.className = 'verify-box verify-missing';
-            resBox.innerText = 'Brakuje: ' + Math.abs(diff).toFixed(2) + ' zł!';
+        if (diff === 0) {
+            resBox.style.borderColor = 'var(--accent-green)';
+            resBox.style.background = 'rgba(16, 185, 129, 0.1)';
+            verifLabel.innerText = 'Wszystko się zgadza:';
+            verifValue.innerText = '0.00 zł';
+            verifValue.style.color = 'var(--accent-green)';
+        } else if (diff > 0) {
+            resBox.style.borderColor = 'var(--primary)';
+            resBox.style.background = 'rgba(59, 130, 246, 0.1)';
+            verifLabel.innerText = 'Nadpłata:';
+            verifValue.innerText = '+' + diff.toFixed(2) + ' zł';
+            verifValue.style.color = 'var(--primary)';
         } else {
-            resBox.className = 'verify-box verify-extra';
-            resBox.innerText = 'Nadpłata: +' + diff.toFixed(2) + ' zł!';
+            resBox.style.borderColor = '#ef4444';
+            resBox.style.background = 'rgba(239, 68, 68, 0.1)';
+            verifLabel.innerText = 'Brakuje siana:';
+            verifValue.innerText = diff.toFixed(2) + ' zł';
+            verifValue.style.color = '#ef4444';
         }
     }
 
