@@ -420,16 +420,16 @@
 
                 <div class="row" style="margin-top: 4px;">
                     <div class="form-group">
-                        <label>Prowizja (zł)</label>
+                        <label>Prowizja (zł) — netto, bez podatku</label>
                         <input type="number" id="manualComm" placeholder="0" oninput="saveAndRecalculateExtras()">
                     </div>
                     <div class="form-group">
-                        <label>Dodatek (zł)</label>
+                        <label>Dodatek (zł) — brutto</label>
                         <input type="number" id="manualBonus" placeholder="0" oninput="saveAndRecalculateExtras()">
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Paliwówka (zł)</label>
+                    <label>Paliwówka (zł) — brutto</label>
                     <input type="number" id="manualFuel" placeholder="0" oninput="saveAndRecalculateExtras()">
                 </div>
             </div>
@@ -1285,22 +1285,31 @@
     }
 
     // ---------- Netto calculation ----------
-    var PIT_THRESHOLD_ANNUAL = 120000; // roczny próg II stawki PIT (32%)
-    var MONTHLY_TAX_RELIEF = 300; // miesięczna kwota zmniejszająca podatek
+    var PIT_THRESHOLD_ANNUAL = 120000; // roczny próg II stawki PIT (32%) — aktualny w 2026 r.
+    var MONTHLY_TAX_RELIEF = 300; // miesięczna kwota zmniejszająca podatek (3600 zł/rok ÷ 12) — aktualna w 2026 r.
+
+    // Ordynacja podatkowa: podstawę opodatkowania i zaliczkę PIT zaokrągla się do
+    // pełnych złotych (końcówka poniżej 50 gr w dół, od 50 gr w górę). Math.round
+    // w JS robi dokładnie to dla liczb dodatnich.
+    function roundToZloty(val) {
+        return Math.round(val);
+    }
 
     // Podstawa opodatkowania dla danego miesiąca przy umowie o pracę (uproszczona:
-    // gross - składki społeczne (13.71%) - 250 zł kosztów uzyskania przychodu).
+    // gross - składki społeczne (13.71%) - 250 zł kosztów uzyskania przychodu),
+    // zaokrąglona do pełnego złotego zgodnie z Ordynacją podatkową.
     function computeUoPMonthlyBase(monthGross) {
         var zusSpoleczne = monthGross * 0.1371;
         var podstawaZdrowotna = monthGross - zusSpoleczne;
         var podstawaOpodatkowania = podstawaZdrowotna - 250;
         if (podstawaOpodatkowania < 0) podstawaOpodatkowania = 0;
+        podstawaOpodatkowania = roundToZloty(podstawaOpodatkowania);
         return { zusSpoleczne: zusSpoleczne, podstawaZdrowotna: podstawaZdrowotna, podstawaOpodatkowania: podstawaOpodatkowania };
     }
 
-    // Sumuje faktyczny brutto danego miesiąca bezpośrednio z zapisanych danych
-    // (a nie z pól formularza), żeby dało się to liczyć dla dowolnego miesiąca roku.
-    // Uwzględnia tryb pracy (Zlecenie vs Umowa o pracę).
+    // Sumuje faktyczny brutto PODLEGAJĄCY OPODATKOWANIU danego miesiąca (bez prowizji,
+    // która jest netto) bezpośrednio z zapisanych danych — używane do wyliczenia
+    // progresji podatkowej w kolejnych miesiącach roku.
     function getMonthGrossFromStorage(monthKey) {
         var settings = getSettings();
         var extras = getExtras();
@@ -1309,7 +1318,7 @@
         if (settings.workMode === 'uop') {
             var salary = getUopSalaryForMonth(monthKey, settings);
             var totals = computeUoPMonthTotals(monthKey, salary, settings.uopOvertimeRate || 0);
-            return totals.baseAfterDeductions + totals.overtimePay + (m.comm || 0) + (m.bonus || 0) + (m.fuel || 0);
+            return totals.baseAfterDeductions + totals.overtimePay + (m.bonus || 0) + (m.fuel || 0);
         }
 
         var data = getData();
@@ -1317,7 +1326,7 @@
         for (var d in data) {
             if (d.indexOf(monthKey) === 0) base += calculateEarn(data[d]);
         }
-        return base + (m.comm || 0) + (m.bonus || 0) + (m.fuel || 0);
+        return base + (m.bonus || 0) + (m.fuel || 0);
     }
 
     // Suma "podstawy opodatkowania" za miesiące poprzedzające dany miesiąc,
@@ -1355,10 +1364,10 @@
                 var remainingLower = Math.max(0, PIT_THRESHOLD_ANNUAL - annualBefore);
                 var lowerPart = Math.min(m.podstawaOpodatkowania, remainingLower);
                 var higherPart = m.podstawaOpodatkowania - lowerPart;
-                zaliczkaPit = (lowerPart * 0.12) + (higherPart * 0.32) - MONTHLY_TAX_RELIEF;
+                zaliczkaPit = roundToZloty((lowerPart * 0.12) + (higherPart * 0.32) - MONTHLY_TAX_RELIEF);
                 if (zaliczkaPit < 0) zaliczkaPit = 0;
             } else {
-                zaliczkaPit = (m.podstawaOpodatkowania * 0.12) - MONTHLY_TAX_RELIEF;
+                zaliczkaPit = roundToZloty((m.podstawaOpodatkowania * 0.12) - MONTHLY_TAX_RELIEF);
                 if (zaliczkaPit < 0) zaliczkaPit = 0;
             }
 
@@ -1381,6 +1390,8 @@
     }
 
     // ---------- Summary ----------
+    // Zwracają { taxableGross, comm }: taxableGross to kwota podlegająca opodatkowaniu,
+    // comm (prowizja) jest już netto i dolicza się ją do wypłaty na rękę bez podatku.
     function renderZlecenieSummary(monthKey) {
         var data = getData();
         var hours = 0, base = 0;
@@ -1395,12 +1406,13 @@
         var comm = parseFloat(document.getElementById('manualComm').value) || 0;
         var bonus = parseFloat(document.getElementById('manualBonus').value) || 0;
         var fuel = parseFloat(document.getElementById('manualFuel').value) || 0;
-        var totalGross = base + comm + bonus + fuel;
+        var taxableGross = base + bonus + fuel;
+        var totalNominal = taxableGross + comm;
 
         document.getElementById('sumHours').innerText = hours + ' h';
         document.getElementById('sumBase').innerText = formatMoney(base);
-        document.getElementById('sumTotal').innerText = formatMoney(totalGross);
-        return totalGross;
+        document.getElementById('sumTotal').innerText = formatMoney(totalNominal);
+        return { taxableGross: taxableGross, comm: comm };
     }
 
     function renderUopSummary(settings, monthKey) {
@@ -1411,21 +1423,22 @@
         var comm = parseFloat(document.getElementById('manualComm').value) || 0;
         var bonus = parseFloat(document.getElementById('manualBonus').value) || 0;
         var fuel = parseFloat(document.getElementById('manualFuel').value) || 0;
-        var totalGross = totals.baseAfterDeductions + totals.overtimePay + comm + bonus + fuel;
+        var taxableGross = totals.baseAfterDeductions + totals.overtimePay + bonus + fuel;
+        var totalNominal = taxableGross + comm;
 
         document.getElementById('uopWorkdays').innerText = totals.workdaysInMonth;
         document.getElementById('uopL4Days').innerText = totals.countL4;
         document.getElementById('uopBezplatnyDays').innerText = totals.countBezplatny;
         document.getElementById('uopOvertimeHours').innerText = totals.overtimeHoursSum + ' h';
         document.getElementById('uopBaseAfterDeductions').innerText = formatMoney(totals.baseAfterDeductions + totals.overtimePay);
-        document.getElementById('sumTotal').innerText = formatMoney(totalGross);
-        return totalGross;
+        document.getElementById('sumTotal').innerText = formatMoney(totalNominal);
+        return { taxableGross: taxableGross, comm: comm };
     }
 
     function updateSummary() {
         var settings = getSettings();
         var monthKey = getCurrentMonthKey();
-        var totalGross = (settings.workMode === 'uop')
+        var result = (settings.workMode === 'uop')
             ? renderUopSummary(settings, monthKey)
             : renderZlecenieSummary(monthKey);
 
@@ -1433,16 +1446,17 @@
 
         if (settings.enableNetto) {
             nettoHint.style.display = 'block';
-            var netVal = calculateNetto(totalGross, settings, monthKey);
+            var netVal = calculateNetto(result.taxableGross, settings, monthKey) + result.comm;
             document.getElementById('nettoTotalVal').innerText = formatMoney(netVal);
 
             var disclaimer = document.getElementById('nettoDisclaimer');
+            var commNote = result.comm > 0 ? ' Prowizja (' + formatMoney(result.comm) + ') doliczona w całości, bez podatku.' : '';
             if (settings.contractType === 'uop' && settings.youngRelief) {
-                disclaimer.innerText = 'Ulga dla młodych: PIT = 0%, nadal naliczane ZUS i zdrowotne. Nie uwzględnia rocznego limitu ulgi (ok. 85 528 zł) ani PPK.';
+                disclaimer.innerText = 'Ulga dla młodych: PIT = 0%, nadal naliczane ZUS i zdrowotne. Nie uwzględnia rocznego limitu ulgi (ok. 85 528 zł) ani PPK.' + commNote;
             } else if (settings.contractType === 'uop' && settings.advancedMode) {
-                disclaimer.innerText = 'Tryb zaawansowany: II próg (32%) liczony narastająco od stycznia na podstawie danych z tej appki. Nie uwzględnia PPK ani rocznego rozliczenia kwoty wolnej.';
+                disclaimer.innerText = 'Tryb zaawansowany: II próg (32%) liczony narastająco od stycznia na podstawie danych z tej appki. Nie uwzględnia PPK ani rocznego rozliczenia kwoty wolnej.' + commNote;
             } else {
-                disclaimer.innerText = 'Wyliczenie orientacyjne — uproszczony szacunek, nie traktuj jako oficjalnej listy płac.';
+                disclaimer.innerText = 'Wyliczenie orientacyjne — uproszczony szacunek, nie traktuj jako oficjalnej listy płac.' + commNote;
             }
         } else {
             nettoHint.style.display = 'none';
