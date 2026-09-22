@@ -268,12 +268,40 @@
             transform: translateX(-50%) translateY(0);
         }
         .toast.error { border-color: var(--accent-rose); }
+
+        .mode-switch {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .mode-btn {
+            flex: 1;
+            padding: 10px 6px;
+            border-radius: 8px;
+            border: 1px solid var(--card-border);
+            background: var(--card-bg);
+            color: var(--text-sub);
+            font-size: 0.78rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+        }
+        .mode-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
     </style>
 </head>
 <body>
 
 <div class="header">
     <h1>Dziennik Pracy</h1>
+</div>
+
+<div class="mode-switch">
+    <button type="button" class="mode-btn active" id="modeZlecenieBtn" onclick="setWorkMode('zlecenie')">💼 Zlecenie / godzinówka</button>
+    <button type="button" class="mode-btn" id="modeUopBtn" onclick="setWorkMode('uop')">📄 Umowa o pracę</button>
 </div>
 
 <div class="layout">
@@ -313,7 +341,7 @@
                 </select>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" id="profileFormGroup">
                 <label>Profil Zmiany</label>
                 <select id="profileSelect" onchange="applyProfile()">
                     <option value="">-- Wybierz profil --</option>
@@ -333,6 +361,11 @@
                 </div>
             </div>
 
+            <div class="form-group" id="uopOvertimeRow" style="display:none;">
+                <label>Nadgodziny (h) — opcjonalnie</label>
+                <input type="number" step="0.5" min="0" id="inputOvertimeHours" placeholder="0">
+            </div>
+
             <div class="row" style="margin-top: 4px;">
                 <button class="btn-primary" onclick="saveSelectedDays()">Zapisz dni</button>
                 <button class="btn-primary" style="background: #ef4444;" onclick="deleteSelectedDays()">Usuń</button>
@@ -343,13 +376,43 @@
     <div>
         <div class="card">
             <h2>Podsumowanie Miesiąca</h2>
-            <div class="sum-item">
-                <span>Przepracowane godziny:</span>
-                <span class="sum-val" id="sumHours">0 h</span>
+
+            <div id="sumZlecenieRows">
+                <div class="sum-item">
+                    <span>Przepracowane godziny:</span>
+                    <span class="sum-val" id="sumHours">0 h</span>
+                </div>
+                <div class="sum-item">
+                    <span>Wypracowana podstawa:</span>
+                    <span class="sum-val" id="sumBase">0 zł</span>
+                </div>
             </div>
-            <div class="sum-item">
-                <span>Wypracowana podstawa:</span>
-                <span class="sum-val" id="sumBase">0 zł</span>
+
+            <div id="sumUopRows" style="display:none;">
+                <div class="form-group">
+                    <label>Wynagrodzenie zasadnicze brutto (zł/mc)</label>
+                    <input type="number" step="0.01" min="0" id="uopSalaryInput" placeholder="np. 5000" oninput="saveUopSalary()">
+                </div>
+                <div class="sum-item">
+                    <span>Dni robocze w miesiącu:</span>
+                    <span class="sum-val" id="uopWorkdays">0</span>
+                </div>
+                <div class="sum-item">
+                    <span>Dni L4:</span>
+                    <span class="sum-val" id="uopL4Days">0</span>
+                </div>
+                <div class="sum-item">
+                    <span>Dni urlopu bezpłatnego:</span>
+                    <span class="sum-val" id="uopBezplatnyDays">0</span>
+                </div>
+                <div class="sum-item">
+                    <span>Nadgodziny:</span>
+                    <span class="sum-val" id="uopOvertimeHours">0 h</span>
+                </div>
+                <div class="sum-item">
+                    <span>Podstawa po redukcjach:</span>
+                    <span class="sum-val" id="uopBaseAfterDeductions">0 zł</span>
+                </div>
             </div>
 
             <div style="margin-top: 8px; border-top: 1px dashed var(--card-border); padding-top: 6px;">
@@ -412,6 +475,14 @@
                 <button class="toggle-btn" id="toggleSettingsBtn" onclick="toggleSection('settingsContent', 'toggleSettingsBtn', 'settingsCard')">▼ Rozwiń</button>
             </h2>
             <div class="collapsible-content" id="settingsContent">
+                <div id="uopSettingsGroup" style="display:none;">
+                    <div class="form-group">
+                        <label>Stawka za nadgodziny (zł/h)</label>
+                        <input type="number" step="0.01" min="0" id="uopOvertimeRateInput" placeholder="np. 45" oninput="saveOptions()">
+                    </div>
+                    <hr style="border:0; border-top:1px solid var(--card-border); margin: 8px 0;">
+                </div>
+
                 <label class="checkbox-label">
                     <input type="checkbox" id="fixedDodatekCheck" onchange="saveOptions()"> Stały dodatek co miesiąc
                 </label>
@@ -572,6 +643,152 @@
         return 0; // bezplatny
     }
 
+    // ---------- Umowa o pracę: liczenie dni / redukcji / nadgodzin ----------
+    function getWorkdaysCountForMonthKey(monthKey) {
+        var year = parseInt(monthKey.split('-')[0], 10);
+        var month = parseInt(monthKey.split('-')[1], 10) - 1;
+        var daysInMonth = new Date(year, month + 1, 0).getDate();
+        var count = 0;
+        for (var day = 1; day <= daysInMonth; day++) {
+            var dow = new Date(year, month, day).getDay();
+            if (dow !== 0 && dow !== 6) count++;
+        }
+        return count;
+    }
+
+    // Zwraca wynagrodzenie zasadnicze dla danego miesiąca: jeśli miesiąc ma własną
+    // wartość zapisaną, użyj jej; w przeciwnym razie użyj ostatnio wpisanej (domyślnej).
+    function getUopSalaryForMonth(monthKey, settings) {
+        var extras = getExtras();
+        var m = extras[monthKey] || {};
+        if (typeof m.uopSalary === 'number' && !isNaN(m.uopSalary)) return m.uopSalary;
+        return (settings && settings.uopDefaultSalary) || 0;
+    }
+
+    // Dla Umowy o pracę: pensja jest stała, a kalendarz tylko ją redukuje
+    // (L4 = 80% dniówki, urlop bezpłatny = 100% dniówki) lub podbija (nadgodziny).
+    // UWAGA: to uproszczenie — realny zasiłek chorobowy liczony jest od średniej
+    // z 12 poprzednich miesięcy, nie od aktualnej pensji.
+    function computeUoPMonthTotals(monthKey, monthlySalary, overtimeRate) {
+        var data = getData();
+        var workdaysInMonth = getWorkdaysCountForMonthKey(monthKey) || 1;
+        var countL4 = 0, countBezplatny = 0, countUrlop = 0, countObecnosc = 0, overtimeHoursSum = 0;
+
+        for (var d in data) {
+            if (d.indexOf(monthKey) === 0) {
+                var e = data[d];
+                var t = e.type || 'work';
+                if (t === 'l4') countL4++;
+                else if (t === 'bezplatny') countBezplatny++;
+                else if (t === 'urlop') countUrlop++;
+                else countObecnosc++;
+                overtimeHoursSum += e.overtimeHours || 0;
+            }
+        }
+
+        var dailyRate = monthlySalary / workdaysInMonth;
+        var l4Deduction = countL4 * dailyRate * 0.2;
+        var bezplatnyDeduction = countBezplatny * dailyRate;
+        var overtimePay = overtimeHoursSum * (overtimeRate || 0);
+        var baseAfterDeductions = Math.max(0, monthlySalary - l4Deduction - bezplatnyDeduction);
+
+        return {
+            workdaysInMonth: workdaysInMonth, countL4: countL4, countBezplatny: countBezplatny,
+            countUrlop: countUrlop, countObecnosc: countObecnosc, overtimeHoursSum: overtimeHoursSum,
+            dailyRate: dailyRate, l4Deduction: l4Deduction, bezplatnyDeduction: bezplatnyDeduction,
+            overtimePay: overtimePay, baseAfterDeductions: baseAfterDeductions
+        };
+    }
+
+    function saveUopSalary() {
+        var monthKey = getCurrentMonthKey();
+        var val = parseFloat(document.getElementById('uopSalaryInput').value) || 0;
+        var extras = getExtras();
+        if (!extras[monthKey]) extras[monthKey] = {};
+        extras[monthKey].uopSalary = val;
+        saveExtras(extras);
+
+        // Zapamiętaj jako domyślną wartość dla kolejnych, jeszcze nie uzupełnionych miesięcy.
+        var settings = getSettings();
+        settings.uopDefaultSalary = val;
+        saveSettings(settings);
+
+        updateSummary();
+    }
+
+    // ---------- Tryb pracy: Zlecenie / godzinówka <-> Umowa o pracę ----------
+    function populateDayTypeOptions(mode) {
+        var select = document.getElementById('dayTypeSelect');
+        var current = select.value || 'work';
+        var labels = mode === 'uop'
+            ? { work: 'Obecność (dzień roboczy)', urlop: 'Urlop wypoczynkowy', l4: 'Zwolnienie lekarskie (L4)', bezplatny: 'Urlop bezpłatny' }
+            : { work: 'Praca (Standardowa)', urlop: 'Urlop płatny', l4: 'Zwolnienie lekarskie (L4 - 80%)', bezplatny: 'Urlop bezpłatny' };
+
+        select.innerHTML = '';
+        ['work', 'urlop', 'l4', 'bezplatny'].forEach(function(v) {
+            var opt = document.createElement('option');
+            opt.value = v;
+            opt.textContent = labels[v];
+            select.appendChild(opt);
+        });
+        select.value = current;
+    }
+
+    function updateDayFormVisibility() {
+        var settings = getSettings();
+        var isUop = settings.workMode === 'uop';
+        var type = document.getElementById('dayTypeSelect').value;
+
+        if (isUop) {
+            document.getElementById('workInputRow').style.display = 'none';
+            document.getElementById('uopOvertimeRow').style.display = (type === 'bezplatny') ? 'none' : 'block';
+        } else {
+            document.getElementById('uopOvertimeRow').style.display = 'none';
+            document.getElementById('workInputRow').style.display = (type === 'bezplatny') ? 'none' : 'flex';
+        }
+    }
+
+    function applyModeVisibility() {
+        var settings = getSettings();
+        var isUop = settings.workMode === 'uop';
+
+        document.getElementById('modeZlecenieBtn').classList.toggle('active', !isUop);
+        document.getElementById('modeUopBtn').classList.toggle('active', isUop);
+
+        document.getElementById('profilesCard').style.display = isUop ? 'none' : 'block';
+        document.getElementById('profileFormGroup').style.display = isUop ? 'none' : 'block';
+
+        document.getElementById('sumZlecenieRows').style.display = isUop ? 'none' : 'block';
+        document.getElementById('sumUopRows').style.display = isUop ? 'block' : 'none';
+
+        document.getElementById('uopSettingsGroup').style.display = isUop ? 'block' : 'none';
+
+        populateDayTypeOptions(isUop ? 'uop' : 'zlecenie');
+        updateDayFormVisibility();
+    }
+
+    function setWorkMode(mode) {
+        var settings = getSettings();
+        if (settings.workMode === mode) return;
+        settings.workMode = mode;
+
+        // Dopasuj sensownie rodzaj umowy do trybu — nadal można to zmienić ręcznie w Ustawieniach.
+        if (mode === 'uop' && settings.contractType !== 'uop') {
+            settings.contractType = 'uop';
+        } else if (mode === 'zlecenie' && (settings.contractType === 'uop' || !settings.contractType)) {
+            settings.contractType = 'uz_normal';
+        }
+
+        saveSettings(settings);
+        selectedDates = [];
+        editingProfileId = null;
+        updateSelectedText();
+        applyModeVisibility();
+        renderProfiles();
+        renderCalendar();
+        showToast(mode === 'uop' ? 'Przełączono na tryb: Umowa o pracę' : 'Przełączono na tryb: Zlecenie / godzinówka');
+    }
+
     // ---------- Data management ----------
     function clearAllHistory() {
         if (confirm('Czy na pewno chcesz wyczyścić całą historię pracy i ustawienia? Ta operacja jest nieodwracalna!')) {
@@ -674,6 +891,7 @@
         }
 
         var data = getData();
+        var isUopMode = getSettings().workMode === 'uop';
         var todayObj = new Date();
         var todayStr = todayObj.getFullYear() + '-' + String(todayObj.getMonth() + 1).padStart(2, '0') + '-' + String(todayObj.getDate()).padStart(2, '0');
 
@@ -693,21 +911,31 @@
             if (data[dateStr]) {
                 var entry = data[dateStr];
                 var t = entry.type || 'work';
-                var h = entry.hours || 0;
-                var earn = calculateEarn(entry);
 
                 html += '<div class="day-info">';
-                if (t === 'work') {
-                    html += '<span class="day-badge badge-shift">' + h + 'h</span>';
-                    html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
-                } else if (t === 'urlop') {
-                    html += '<span class="day-badge badge-urlop">Urlop</span>';
-                    html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
-                } else if (t === 'l4') {
-                    html += '<span class="day-badge badge-l4">L4 (80%)</span>';
-                    html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
-                } else if (t === 'bezplatny') {
-                    html += '<span class="day-badge badge-bezpl">Bezpłatny</span>';
+                if (isUopMode) {
+                    if (t === 'work') html += '<span class="day-badge badge-shift">Obecność</span>';
+                    else if (t === 'urlop') html += '<span class="day-badge badge-urlop">Urlop</span>';
+                    else if (t === 'l4') html += '<span class="day-badge badge-l4">L4</span>';
+                    else if (t === 'bezplatny') html += '<span class="day-badge badge-bezpl">Bezpłatny</span>';
+                    if (entry.overtimeHours) {
+                        html += '<span class="day-badge badge-earn">+' + entry.overtimeHours + 'h nadg.</span>';
+                    }
+                } else {
+                    var h = entry.hours || 0;
+                    var earn = calculateEarn(entry);
+                    if (t === 'work') {
+                        html += '<span class="day-badge badge-shift">' + h + 'h</span>';
+                        html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
+                    } else if (t === 'urlop') {
+                        html += '<span class="day-badge badge-urlop">Urlop</span>';
+                        html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
+                    } else if (t === 'l4') {
+                        html += '<span class="day-badge badge-l4">L4 (80%)</span>';
+                        html += '<span class="day-badge badge-earn">' + Math.round(earn) + 'zł</span>';
+                    } else if (t === 'bezplatny') {
+                        html += '<span class="day-badge badge-bezpl">Bezpłatny</span>';
+                    }
                 }
                 html += '</div>';
             }
@@ -803,13 +1031,7 @@
     }
 
     function handleDayTypeChange() {
-        var val = document.getElementById('dayTypeSelect').value;
-        var row = document.getElementById('workInputRow');
-        if (val === 'bezplatny') {
-            row.style.display = 'none';
-        } else {
-            row.style.display = 'flex';
-        }
+        updateDayFormVisibility();
     }
 
     // ---------- Profiles ----------
@@ -924,7 +1146,22 @@
     // ---------- Day entries ----------
     function saveSelectedDays() {
         if (selectedDates.length === 0) return showToast('Zaznacz dni na kalendarzu!', true);
+        var settings = getSettings();
+        var isUop = settings.workMode === 'uop';
         var type = document.getElementById('dayTypeSelect').value;
+        var data = getData();
+
+        if (isUop) {
+            var overtimeHours = (type === 'bezplatny') ? 0 : (parseFloat(document.getElementById('inputOvertimeHours').value) || 0);
+            for (var i = 0; i < selectedDates.length; i++) {
+                data[selectedDates[i]] = { type: type, overtimeHours: overtimeHours };
+            }
+            saveData(data);
+            renderCalendar();
+            showToast('Zapisano ' + selectedDates.length + ' dni.');
+            return;
+        }
+
         var hours = type === 'bezplatny' ? 0 : (parseFloat(document.getElementById('inputHours').value) || 0);
         var rate = type === 'bezplatny' ? 0 : (parseFloat(document.getElementById('inputRate').value) || 0);
 
@@ -935,9 +1172,8 @@
             return showToast('Podaj stawkę godzinową większą od 0.', true);
         }
 
-        var data = getData();
-        for (var i = 0; i < selectedDates.length; i++) {
-            data[selectedDates[i]] = { type: type, hours: hours, rate: rate };
+        for (var j = 0; j < selectedDates.length; j++) {
+            data[selectedDates[j]] = { type: type, hours: hours, rate: rate };
         }
         saveData(data);
         if (type !== 'bezplatny') saveLastUsed(hours, rate);
@@ -971,6 +1207,8 @@
         document.getElementById('taxRateInput').value = settings.taxRate || 25;
         document.getElementById('youngReliefCheck').checked = settings.youngRelief || false;
         document.getElementById('advancedModeCheck').checked = settings.advancedMode || false;
+        document.getElementById('uopOvertimeRateInput').value = settings.uopOvertimeRate || '';
+        document.getElementById('uopSalaryInput').value = getUopSalaryForMonth(monthKey, settings) || '';
 
         var detailsDisplay = settings.enableNetto ? 'block' : 'none';
         document.getElementById('taxDetailsGroup').style.display = detailsDisplay;
@@ -1004,6 +1242,7 @@
         var taxRate = parseFloat(document.getElementById('taxRateInput').value) || 0;
         var youngRelief = document.getElementById('youngReliefCheck').checked;
         var advancedMode = document.getElementById('advancedModeCheck').checked;
+        var uopOvertimeRate = parseFloat(document.getElementById('uopOvertimeRateInput').value) || 0;
 
         document.getElementById('fixedDodatekValGroup').style.display = isFixed ? 'block' : 'none';
         document.getElementById('taxDetailsGroup').style.display = enableNetto ? 'block' : 'none';
@@ -1015,7 +1254,10 @@
             contractType: contractType,
             taxRate: taxRate,
             youngRelief: youngRelief,
-            advancedMode: advancedMode
+            advancedMode: advancedMode,
+            workMode: getSettings().workMode,
+            uopDefaultSalary: getSettings().uopDefaultSalary,
+            uopOvertimeRate: uopOvertimeRate
         };
         updateTaxSubOptionsVisibility(settings);
         saveSettings(settings);
@@ -1058,14 +1300,23 @@
 
     // Sumuje faktyczny brutto danego miesiąca bezpośrednio z zapisanych danych
     // (a nie z pól formularza), żeby dało się to liczyć dla dowolnego miesiąca roku.
+    // Uwzględnia tryb pracy (Zlecenie vs Umowa o pracę).
     function getMonthGrossFromStorage(monthKey) {
-        var data = getData();
+        var settings = getSettings();
         var extras = getExtras();
+        var m = extras[monthKey] || {};
+
+        if (settings.workMode === 'uop') {
+            var salary = getUopSalaryForMonth(monthKey, settings);
+            var totals = computeUoPMonthTotals(monthKey, salary, settings.uopOvertimeRate || 0);
+            return totals.baseAfterDeductions + totals.overtimePay + (m.comm || 0) + (m.bonus || 0) + (m.fuel || 0);
+        }
+
+        var data = getData();
         var base = 0;
         for (var d in data) {
             if (d.indexOf(monthKey) === 0) base += calculateEarn(data[d]);
         }
-        var m = extras[monthKey] || {};
         return base + (m.comm || 0) + (m.bonus || 0) + (m.fuel || 0);
     }
 
@@ -1130,9 +1381,8 @@
     }
 
     // ---------- Summary ----------
-    function updateSummary() {
+    function renderZlecenieSummary(monthKey) {
         var data = getData();
-        var monthKey = getCurrentMonthKey();
         var hours = 0, base = 0;
 
         for (var d in data) {
@@ -1145,14 +1395,40 @@
         var comm = parseFloat(document.getElementById('manualComm').value) || 0;
         var bonus = parseFloat(document.getElementById('manualBonus').value) || 0;
         var fuel = parseFloat(document.getElementById('manualFuel').value) || 0;
-
         var totalGross = base + comm + bonus + fuel;
 
         document.getElementById('sumHours').innerText = hours + ' h';
         document.getElementById('sumBase').innerText = formatMoney(base);
         document.getElementById('sumTotal').innerText = formatMoney(totalGross);
+        return totalGross;
+    }
 
+    function renderUopSummary(settings, monthKey) {
+        var salary = parseFloat(document.getElementById('uopSalaryInput').value) || 0;
+        var overtimeRate = settings.uopOvertimeRate || 0;
+        var totals = computeUoPMonthTotals(monthKey, salary, overtimeRate);
+
+        var comm = parseFloat(document.getElementById('manualComm').value) || 0;
+        var bonus = parseFloat(document.getElementById('manualBonus').value) || 0;
+        var fuel = parseFloat(document.getElementById('manualFuel').value) || 0;
+        var totalGross = totals.baseAfterDeductions + totals.overtimePay + comm + bonus + fuel;
+
+        document.getElementById('uopWorkdays').innerText = totals.workdaysInMonth;
+        document.getElementById('uopL4Days').innerText = totals.countL4;
+        document.getElementById('uopBezplatnyDays').innerText = totals.countBezplatny;
+        document.getElementById('uopOvertimeHours').innerText = totals.overtimeHoursSum + ' h';
+        document.getElementById('uopBaseAfterDeductions').innerText = formatMoney(totals.baseAfterDeductions + totals.overtimePay);
+        document.getElementById('sumTotal').innerText = formatMoney(totalGross);
+        return totalGross;
+    }
+
+    function updateSummary() {
         var settings = getSettings();
+        var monthKey = getCurrentMonthKey();
+        var totalGross = (settings.workMode === 'uop')
+            ? renderUopSummary(settings, monthKey)
+            : renderZlecenieSummary(monthKey);
+
         var nettoHint = document.getElementById('nettoHint');
 
         if (settings.enableNetto) {
@@ -1175,6 +1451,7 @@
 
     // Inicjalizacja przy starcie
     window.onload = function() {
+        applyModeVisibility();
         renderProfiles();
         updateSelectedText();
         renderCalendar();
